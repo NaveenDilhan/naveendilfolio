@@ -25,7 +25,7 @@ const CAMERA_VIEWS = {
 const clock = new THREE.Clock();
 const vgaFans = []; // Array to hold ALL fans
 // Create ONE shared material for all RGB fans so it doesn't need scene lighting
-const sharedRgbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff }); 
+const sharedRgbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }); 
 
 // --- Video Texture Setup ---
 const video = document.createElement('video');
@@ -107,6 +107,8 @@ const setupCamera = () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   controls.update();
+
+  controls.maxDistance = camera.position.distanceTo(controls.target);
 };
 
 setupCamera(); 
@@ -193,7 +195,7 @@ const render = () => {
 
   // Animate the single shared material (updates all fans instantly)
   const hue = (elapsedTime * 0.3) % 1; 
-  sharedRgbMaterial.color.setHSL(hue, 1, 0.5); 
+  sharedRgbMaterial.color.setHSL(hue, 1, 0.5).multiplyScalar(2.5); 
   
   renderer.render(scene, camera);
   window.requestAnimationFrame(render);
