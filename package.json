@@ -1,0 +1,19 @@
+{
+  "name": "my-portfolio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^8.0.1"
+  },
+  "dependencies": {
+    "gsap": "^3.14.2",
+    "sass": "^1.98.0",
+    "three": "^0.183.2"
+  }
+}
