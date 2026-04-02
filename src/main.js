@@ -114,7 +114,7 @@ const setupCamera = () => {
 setupCamera(); 
 
 // --- Model Loading ---
-gltfLoader.load("/models/Room_Portfolio_V1.glb", (glb) => {
+gltfLoader.load("/models/Room_Portfolio_V3.glb", (glb) => {
   glb.scene.traverse((child) => {
     
     // 1. Push EVERY fan found into our array
@@ -190,7 +190,7 @@ const render = () => {
   // Loop through the array and rotate EVERY fan
   vgaFans.forEach(fan => {
     // Again, change .z to .x or .y if they spin on the wrong axis
-    fan.rotation.z += 0.05; 
+    fan.rotation.z += 0.01; 
   });
 
   // Animate the single shared material (updates all fans instantly)
