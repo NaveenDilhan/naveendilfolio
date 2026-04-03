@@ -12,6 +12,9 @@ export default class App {
     
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
+    // --- FIX: Track the highest progress seen to prevent jumping backward ---
+    this.highestProgress = 0; 
+
     this.initScene();
     this.initCamera();
     this.initRenderer();
@@ -30,8 +33,14 @@ export default class App {
 
   handleLoadProgress(progress) {
     const percent = Math.round(progress * 100);
-    document.getElementById('progress-text').innerText = `${percent}%`;
-    gsap.to('#progress-bar', { width: `${percent}%`, duration: 0.3, ease: 'power1.out' });
+    
+    // Only update the UI if the new percentage is greater than our highest recorded
+    if (percent > this.highestProgress) {
+      this.highestProgress = percent;
+      
+      document.getElementById('progress-text').innerText = `${this.highestProgress}%`;
+      gsap.to('#progress-bar', { width: `${this.highestProgress}%`, duration: 0.3, ease: 'power1.out' });
+    }
   }
 
   handleLoadComplete() {
