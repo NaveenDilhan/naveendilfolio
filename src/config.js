@@ -6,7 +6,7 @@ export const CAMERA_VIEWS = {
     target: new THREE.Vector3(0.09, 3.59, -1.11)
   },
   mobile: {
-    position: new THREE.Vector3(11.68, 14.01, 31.37),
+    position: new THREE.Vector3(34.45, 22.70, 22.42),
     target: new THREE.Vector3(-0.08, 3.31, -0.74)
   }
 };

@@ -83,9 +83,8 @@ export default class App {
     
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.minDistance = 5;
-    this.controls.maxDistance = 45;
     this.controls.minPolarAngle = 0;
-    this.controls.maxPolarAngle = Math.PI / 2.5;
+    // maxPolarAngle is now handled dynamically in setupCameraView()
     this.controls.minAzimuthAngle = 0.2;
     this.controls.maxAzimuthAngle = Math.PI / 2.5;
     this.controls.enableDamping = true;
@@ -104,9 +103,13 @@ export default class App {
     
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
+     
+    this.controls.maxPolarAngle = this.isMobile ? Math.PI / 3.0 : Math.PI / 2.5;
+    
     this.controls.update();
 
     this.controls.maxDistance = this.camera.position.distanceTo(this.controls.target);
+
   }
 
   initRenderer() {
@@ -241,6 +244,29 @@ export default class App {
       this.camera.aspect = this.size.width / this.size.height;
       this.camera.updateProjectionMatrix();
     });
+
+    // --- TEMPORARY LOGGING FOR MOBILE CAMERA SETUP ---
+    // TO DELETE: Remove these event listeners when finished
+    window.addEventListener('keydown', (event) => {
+      if (event.key.toLowerCase() === 'c') {
+        console.log(`
+  mobile: {
+    position: new THREE.Vector3(${this.camera.position.x.toFixed(2)}, ${this.camera.position.y.toFixed(2)}, ${this.camera.position.z.toFixed(2)}),
+    target: new THREE.Vector3(${this.controls.target.x.toFixed(2)}, ${this.controls.target.y.toFixed(2)}, ${this.controls.target.z.toFixed(2)})
+  }
+        `);
+      }
+    });
+
+    window.addEventListener('dblclick', () => {
+        console.log(`
+  mobile: {
+    position: new THREE.Vector3(${this.camera.position.x.toFixed(2)}, ${this.camera.position.y.toFixed(2)}, ${this.camera.position.z.toFixed(2)}),
+    target: new THREE.Vector3(${this.controls.target.x.toFixed(2)}, ${this.controls.target.y.toFixed(2)}, ${this.controls.target.z.toFixed(2)})
+  }
+        `);
+    });
+    // -------------------------------------------------
   }
 
   render() {
