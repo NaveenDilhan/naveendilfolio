@@ -78,7 +78,7 @@ export default class Room {
     const gltfLoader = new GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);
 
-    gltfLoader.load("/models/Room_Portfolio_V3.glb", (glb) => {
+    gltfLoader.load("/models/Room_Portfolio_V4.glb", (glb) => {
       glb.scene.traverse((child) => {
         
         if (child.name.toLowerCase().includes("chair_top")) {
