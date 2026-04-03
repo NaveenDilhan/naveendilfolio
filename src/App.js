@@ -103,7 +103,8 @@ export default class App {
     
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
-     
+    
+ 
     this.controls.maxPolarAngle = this.isMobile ? Math.PI / 3.0 : Math.PI / 2.5;
     
     this.controls.update();
@@ -245,28 +246,6 @@ export default class App {
       this.camera.updateProjectionMatrix();
     });
 
-    // --- TEMPORARY LOGGING FOR MOBILE CAMERA SETUP ---
-    // TO DELETE: Remove these event listeners when finished
-    window.addEventListener('keydown', (event) => {
-      if (event.key.toLowerCase() === 'c') {
-        console.log(`
-  mobile: {
-    position: new THREE.Vector3(${this.camera.position.x.toFixed(2)}, ${this.camera.position.y.toFixed(2)}, ${this.camera.position.z.toFixed(2)}),
-    target: new THREE.Vector3(${this.controls.target.x.toFixed(2)}, ${this.controls.target.y.toFixed(2)}, ${this.controls.target.z.toFixed(2)})
-  }
-        `);
-      }
-    });
-
-    window.addEventListener('dblclick', () => {
-        console.log(`
-  mobile: {
-    position: new THREE.Vector3(${this.camera.position.x.toFixed(2)}, ${this.camera.position.y.toFixed(2)}, ${this.camera.position.z.toFixed(2)}),
-    target: new THREE.Vector3(${this.controls.target.x.toFixed(2)}, ${this.controls.target.y.toFixed(2)}, ${this.controls.target.z.toFixed(2)})
-  }
-        `);
-    });
-    // -------------------------------------------------
   }
 
   render() {
