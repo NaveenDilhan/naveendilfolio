@@ -1,3 +1,4 @@
+// src/App.js
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import gsap from 'gsap';
@@ -55,25 +56,47 @@ export default class App {
 
     if (this.controls) this.controls.enabled = false;
 
-    const tl = gsap.timeline({
-      onComplete: () => {
-        if (this.controls) this.controls.enabled = true;
-        // Attempt to start the music once the loading screen completely fades
-        this.audioManager.playInitialRandom(); 
-      }
-    });
-    
-    tl.to('.loader-content', { opacity: 0, scale: 0.9, duration: 0.5, ease: 'power2.in' }) 
-      .to('#loading-screen', { opacity: 0, duration: 0.8, ease: 'power2.inOut', onComplete: () => {
-         document.getElementById('loading-screen').style.display = 'none'; 
-      }})
-      .to(this.camera.position, { 
-        x: finalCameraPos.x, 
-        y: finalCameraPos.y, 
-        z: finalCameraPos.z,
-        duration: 3.5, 
-        ease: 'power3.inOut' 
-      }, "-=0.6"); 
+    // --- Transform progress text into a "Click to Start" Button ---
+    const progressText = document.getElementById('progress-text');
+    const progressBar = document.getElementById('progress-bar');
+
+    if (progressText) {
+      progressText.innerText = "Click to Start";
+      progressText.classList.add('start-btn'); 
+    }
+
+    // Hide the progress bar so only the button is visible
+    if (progressBar && progressBar.parentElement) {
+       progressBar.parentElement.style.display = 'none';
+    }
+
+    const startExperience = () => {
+      window.removeEventListener('pointerdown', startExperience);
+      
+      // Since the user has now clicked, the browser will allow audio to play!
+      this.audioManager.playInitialRandom(); 
+
+      const tl = gsap.timeline({
+        onComplete: () => {
+          if (this.controls) this.controls.enabled = true;
+        }
+      });
+      
+      tl.to('.loader-content', { opacity: 0, scale: 0.9, duration: 0.5, ease: 'power2.in' }) 
+        .to('#loading-screen', { opacity: 0, duration: 0.8, ease: 'power2.inOut', onComplete: () => {
+           document.getElementById('loading-screen').style.display = 'none'; 
+        }})
+        .to(this.camera.position, { 
+          x: finalCameraPos.x, 
+          y: finalCameraPos.y, 
+          z: finalCameraPos.z,
+          duration: 3.5, 
+          ease: 'power3.inOut' 
+        }, "-=0.6"); 
+    };
+
+    // Wait for user interaction before fading the loading screen out
+    window.addEventListener('pointerdown', startExperience);
   }
 
   initScene() {
@@ -208,7 +231,6 @@ export default class App {
         const clickedObject = intersects[0].object;
         const nameLower = clickedObject.name.toLowerCase();
 
-        // Music Player Toggle Interaction
         if (nameLower.includes('speaker')) {
            this.audioManager.togglePlayerUI();
         }
@@ -273,7 +295,6 @@ export default class App {
               const hoveredObject = intersects[0].object;
               const nameLower = hoveredObject.name.toLowerCase();
 
-              // Ensure the speaker triggers the pointer cursor hover state
               const isPointerObject = nameLower.includes('pointer') || 
                                       nameLower.includes('github') || 
                                       nameLower.includes('linkedin') || 
