@@ -7,6 +7,9 @@ export default class Room {
   constructor(scene) {
     this.scene = scene;
     this.vgaFans = [];
+    this.raycastObjects = []; 
+    this.pointerObjects = []; 
+    
     this.sharedRgbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
     this.loadedTextures = { day: {} };
     
@@ -62,6 +65,29 @@ export default class Room {
         }
 
         if (child.isMesh) {
+          const nameLower = child.name.toLowerCase();
+
+          // --- Collect Raycaster/Pointer/Social/Modal Objects ---
+          const isInteractive = nameLower.includes("raycaster") || 
+                                nameLower.includes("pointer") || 
+                                nameLower.includes("github") || 
+                                nameLower.includes("linkedin") || 
+                                nameLower.includes("instagram") ||
+                                nameLower.includes("works") ||
+                                nameLower.includes("about") ||
+                                nameLower.includes("contact");
+
+          if (isInteractive) {
+            // Save the original scale
+            child.userData.originalScale = child.scale.clone();
+            // Target scale used for smooth lerping
+            child.userData.targetScale = child.scale.clone();
+            
+            this.raycastObjects.push(child);
+            this.pointerObjects.push(child);
+          }
+          // -----------------------------------------------------------------
+
           // 2. Baked Textures
           const matchedKey = Object.keys(this.loadedTextures.day).find((key) => child.name.includes(key));
           if (matchedKey) {
@@ -111,5 +137,13 @@ export default class Room {
     // Animate RGB material
     const hue = (elapsedTime * 0.3) % 1; 
     this.sharedRgbMaterial.color.setHSL(hue, 1, 0.5).multiplyScalar(2.5); 
+
+    // Smooth hover scaling for interactive objects
+    const interactables = [...new Set([...this.raycastObjects, ...this.pointerObjects])];
+    interactables.forEach(obj => {
+      if (obj.userData.targetScale) {
+        obj.scale.lerp(obj.userData.targetScale, 0.15); 
+      }
+    });
   }
 }

@@ -2,16 +2,37 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>my-portfolio</title>
+    <title>My Portfolio</title>
   </head>
   <body>
-    <div id="app"></div>
+    <canvas id="experience-canvas"></canvas>
 
-    <div id="experience">
-      <canvas id="experience-canvas" class="experience-canvas"></canvas>
+    <div id="modal-container">
+      <div class="modal-overlay"></div>
+      
+      <div class="modal-content" id="modal-works">
+        <button class="close-btn">&times;</button>
+        <h2>My Works</h2>
+        <p>Welcome to my works section! Here you can list out your latest projects, case studies, or links to other repositories. This space is yours to customize.</p>
+        <div class="modal-placeholder-grid"></div>
+      </div>
+
+      <div class="modal-content" id="modal-about">
+        <button class="close-btn">&times;</button>
+        <h2>About Me</h2>
+        <p>Hello! I am a passionate developer creating immersive 3D web experiences. I specialize in Three.js, React, and modern web technologies.</p>
+      </div>
+
+      <div class="modal-content" id="modal-contact">
+        <button class="close-btn">&times;</button>
+        <h2>Contact</h2>
+        <p>Let's build something amazing together.</p>
+        <a href="mailto:your-email@example.com" class="contact-button">Email Me</a>
+      </div>
     </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
