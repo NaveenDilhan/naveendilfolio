@@ -87,7 +87,7 @@ export default class App {
     this.controls.minPolarAngle = 0;
     this.controls.maxPolarAngle = Math.PI / 2.5;
     this.controls.minAzimuthAngle = 0.2;
-    this.controls.maxAzimuthAngle = Math.PI / 3;
+    this.controls.maxAzimuthAngle = Math.PI / 2.5;
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
     this.controls.rotateSpeed = 0.4; 
