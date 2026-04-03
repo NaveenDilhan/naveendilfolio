@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import gsap from 'gsap';
 import { CAMERA_VIEWS } from './config.js';
 import Room from './Room.js';
+import AudioManager from './AudioManager.js'; 
 
 export default class App {
   constructor(canvasId) {
@@ -12,7 +13,6 @@ export default class App {
     
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
-    // --- FIX: Track the highest progress seen to prevent jumping backward ---
     this.highestProgress = 0; 
 
     this.initScene();
@@ -20,6 +20,9 @@ export default class App {
     this.initRenderer();
     this.initModals();     
     this.initRaycaster(); 
+    
+    // Initialize Audio Manager
+    this.audioManager = new AudioManager(); 
     
     this.room = new Room(
         this.scene, 
@@ -34,10 +37,8 @@ export default class App {
   handleLoadProgress(progress) {
     const percent = Math.round(progress * 100);
     
-    // Only update the UI if the new percentage is greater than our highest recorded
     if (percent > this.highestProgress) {
       this.highestProgress = percent;
-      
       document.getElementById('progress-text').innerText = `${this.highestProgress}%`;
       gsap.to('#progress-bar', { width: `${this.highestProgress}%`, duration: 0.3, ease: 'power1.out' });
     }
@@ -46,7 +47,6 @@ export default class App {
   handleLoadComplete() {
     const finalCameraPos = this.camera.position.clone();
 
-    // Start lower and closer
     this.camera.position.set(
       finalCameraPos.x * 0.2, 
       finalCameraPos.y * 0.3 + 1, 
@@ -58,6 +58,8 @@ export default class App {
     const tl = gsap.timeline({
       onComplete: () => {
         if (this.controls) this.controls.enabled = true;
+        // Attempt to start the music once the loading screen completely fades
+        this.audioManager.playInitialRandom(); 
       }
     });
     
@@ -84,7 +86,6 @@ export default class App {
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.minDistance = 5;
     this.controls.minPolarAngle = 0;
-    // maxPolarAngle is now handled dynamically in setupCameraView()
     this.controls.minAzimuthAngle = 0.2;
     this.controls.maxAzimuthAngle = Math.PI / 2.5;
     this.controls.enableDamping = true;
@@ -104,13 +105,9 @@ export default class App {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     
- 
     this.controls.maxPolarAngle = this.isMobile ? Math.PI / 3.0 : Math.PI / 2.5;
-    
     this.controls.update();
-
     this.controls.maxDistance = this.camera.position.distanceTo(this.controls.target);
-
   }
 
   initRenderer() {
@@ -211,6 +208,11 @@ export default class App {
         const clickedObject = intersects[0].object;
         const nameLower = clickedObject.name.toLowerCase();
 
+        // Music Player Toggle Interaction
+        if (nameLower.includes('speaker')) {
+           this.audioManager.togglePlayerUI();
+        }
+
         if (nameLower.includes('github')) {
           window.open('https://github.com/naveendilhan', '_blank');
         } else if (nameLower.includes('linkedin')) {
@@ -245,7 +247,6 @@ export default class App {
       this.camera.aspect = this.size.width / this.size.height;
       this.camera.updateProjectionMatrix();
     });
-
   }
 
   render() {
@@ -272,13 +273,15 @@ export default class App {
               const hoveredObject = intersects[0].object;
               const nameLower = hoveredObject.name.toLowerCase();
 
+              // Ensure the speaker triggers the pointer cursor hover state
               const isPointerObject = nameLower.includes('pointer') || 
                                       nameLower.includes('github') || 
                                       nameLower.includes('linkedin') || 
                                       nameLower.includes('instagram') ||
                                       nameLower.includes('works') ||
                                       nameLower.includes('about') ||
-                                      nameLower.includes('contact');
+                                      nameLower.includes('contact') ||
+                                      nameLower.includes('speaker'); 
 
               if (isPointerObject) shouldShowPointer = true;
 
