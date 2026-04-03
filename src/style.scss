@@ -57,25 +57,35 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(18, 12, 30, 0.45); 
-    /* We keep the overlay blur, but some browsers will drop it over WebGL */
+    
+    /* Darkened the overlay so it dims the 3D scene more reliably */
+    background: rgba(18, 12, 30, 0.65); 
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+    
+    /* Force GPU layer to prevent WebGL dropping the blur */
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
   }
 
-  /* WEBGL DEPLOYMENT FIX: Added blur and hardware acceleration directly to the card */
   .modal-content {
     position: relative; 
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
+    
+    /* Bulletproof Fallback: A darker, slightly more opaque background. 
+       If a mobile browser drops the blur effect, this ensures the text remains perfectly readable! */
+    background: linear-gradient(135deg, rgba(40, 24, 55, 0.75), rgba(20, 10, 30, 0.65));
     
     /* Force blur directly on the element */
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     
-    /* Force GPU rendering to prevent WebGL context from breaking the CSS blur */
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
+    /* Stronger hardware acceleration hack for Safari/iOS over WebGL */
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
     will-change: transform, opacity;
+
+    /* Fixes a Safari bug where blur ignores rounded corners */
+    overflow: hidden; 
 
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-top: 1px solid rgba(255, 255, 255, 0.3);
@@ -108,9 +118,9 @@ body {
     }
 
     p {
-      font-size: 1.6rem; 
+      font-size: 1.2rem; 
       line-height: 1.7;
-      color: rgba(255, 255, 255, 0.85);
+      color: rgba(255, 255, 255, 0.95); /* Brightened the text slightly for the darker background */
       margin-bottom: 30px;
       font-weight: 400;
     }
@@ -198,7 +208,7 @@ body {
 
 .loader-title {
   font-family: $font-title; /* Applied Motley Forces */
-  font-size: 3rem;
+  font-size: 2.2rem;
   font-weight: normal;
   letter-spacing: 1.5px;
   margin-bottom: 0.3rem;
@@ -210,7 +220,7 @@ body {
 }
 
 .loader-subtitle {
-  font-size: 1.5rem;
+  font-size: 1.1rem;
   color: rgba(255, 255, 255, 0.7);
   margin-bottom: 2.5rem;
   font-weight: 400;
