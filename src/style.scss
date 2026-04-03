@@ -1,7 +1,7 @@
 @use "./styles/fonts.scss";
 
 /* --- SOLUTION FOR MISSING NUMBERS --- */
-/* This intercepts numbers, percentages, and dots before they reach Shifty Notes */
+/* Intercepts numbers, percentages, and dots before they reach Shifty Notes */
 @font-face {
   font-family: "Number Fallback";
   src: local("Arial Rounded MT Bold"), local("Comic Sans MS"), local("Nunito"), local("sans-serif");
@@ -58,13 +58,25 @@ body {
     width: 100%;
     height: 100%;
     background: rgba(18, 12, 30, 0.45); 
+    /* We keep the overlay blur, but some browsers will drop it over WebGL */
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
   }
 
+  /* WEBGL DEPLOYMENT FIX: Added blur and hardware acceleration directly to the card */
   .modal-content {
     position: relative; 
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03));
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
+    
+    /* Force blur directly on the element */
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    
+    /* Force GPU rendering to prevent WebGL context from breaking the CSS blur */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform, opacity;
+
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-top: 1px solid rgba(255, 255, 255, 0.3);
     border-left: 1px solid rgba(255, 255, 255, 0.3);
@@ -84,8 +96,8 @@ body {
     h2 {
       font-family: $font-title; /* Applied Motley Forces */
       margin-top: 0;
-      font-size: 2.6rem; /* Slightly bumped up for display fonts */
-      font-weight: normal; /* Custom fonts usually don't need heavy bolding */
+      font-size: 2.6rem; 
+      font-weight: normal; 
       letter-spacing: 1px;
       margin-bottom: 20px;
       background: linear-gradient(to right, #ffb1cb, #bcf5ff);
@@ -96,7 +108,7 @@ body {
     }
 
     p {
-      font-size: 1.6rem; /* Bumped up slightly to accommodate custom font readability */
+      font-size: 1.6rem; 
       line-height: 1.7;
       color: rgba(255, 255, 255, 0.85);
       margin-bottom: 30px;
@@ -130,7 +142,7 @@ body {
     }
 
     .contact-button {
-      font-family: $font-title; /* Made the button use the title font for extra punch */
+      font-family: $font-title; /* Button uses Motley Forces */
       display: inline-block;
       padding: 14px 36px;
       background: linear-gradient(135deg, #ffb1cb, #bcf5ff);
@@ -186,7 +198,7 @@ body {
 
 .loader-title {
   font-family: $font-title; /* Applied Motley Forces */
-  font-size: 2.5rem;
+  font-size: 3rem;
   font-weight: normal;
   letter-spacing: 1.5px;
   margin-bottom: 0.3rem;
@@ -239,5 +251,5 @@ body {
   font-size: 1.2rem;
   font-weight: 600;
   color: #ffb1cb;
-  /* Will automatically use the "Number Fallback" font here! */
+  /* Automatically uses the "Number Fallback" font here! */
 }
