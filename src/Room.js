@@ -4,15 +4,36 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { TEXTURE_MAP } from './config.js';
 
 export default class Room {
-  constructor(scene) {
+  constructor(scene, onProgress, onLoad) {
     this.scene = scene;
+    this.onProgress = onProgress;
+    this.onLoad = onLoad;
+    
     this.vgaFans = [];
     this.raycastObjects = []; 
     this.pointerObjects = []; 
+    this.interactiveObjects = []; 
+    this.chairTop = null; 
     
     this.sharedRgbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
     this.loadedTextures = { day: {} };
     
+    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+
+    THREE.DefaultLoadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
+      const progress = itemsLoaded / itemsTotal;
+      if (this.onProgress) this.onProgress(progress);
+    };
+
+    THREE.DefaultLoadingManager.onLoad = () => {
+      if (this.onLoad) this.onLoad();
+    };
+
+    THREE.DefaultLoadingManager.onError = (url) => {
+      console.error('⚠️ Missing File Detected. Could not load:', url);
+      if (this.onLoad) this.onLoad(); 
+    };
+
     this.initVideo();
     this.initTextures();
     this.initModel();
@@ -25,7 +46,8 @@ export default class Room {
     this.video.loop = true;
     this.video.muted = true; 
     this.video.playsInline = true;
-    this.video.play(); 
+    
+    this.video.play().catch(e => console.warn("Video autoplay prevented:", e)); 
 
     this.videoTexture = new THREE.VideoTexture(this.video);
     this.videoTexture.colorSpace = THREE.SRGBColorSpace;
@@ -59,7 +81,11 @@ export default class Room {
     gltfLoader.load("/models/Room_Portfolio_V3.glb", (glb) => {
       glb.scene.traverse((child) => {
         
-        // 1. Collect VGA Fans
+        if (child.name.toLowerCase().includes("chair_top")) {
+          this.chairTop = child;
+          this.chairTop.userData.initialRotation = child.rotation.clone();
+        }
+
         if (child.name.includes("VGA_Fans")) {
           this.vgaFans.push(child);
         }
@@ -67,7 +93,6 @@ export default class Room {
         if (child.isMesh) {
           const nameLower = child.name.toLowerCase();
 
-          // --- Collect Raycaster/Pointer/Social/Modal Objects ---
           const isInteractive = nameLower.includes("raycaster") || 
                                 nameLower.includes("pointer") || 
                                 nameLower.includes("github") || 
@@ -78,17 +103,13 @@ export default class Room {
                                 nameLower.includes("contact");
 
           if (isInteractive) {
-            // Save the original scale
             child.userData.originalScale = child.scale.clone();
-            // Target scale used for smooth lerping
             child.userData.targetScale = child.scale.clone();
             
             this.raycastObjects.push(child);
             this.pointerObjects.push(child);
           }
-          // -----------------------------------------------------------------
 
-          // 2. Baked Textures
           const matchedKey = Object.keys(this.loadedTextures.day).find((key) => child.name.includes(key));
           if (matchedKey) {
             if (child.material) child.material.dispose();
@@ -100,23 +121,29 @@ export default class Room {
             }
           }
           
-          // 3. Glass Materials
           if (child.material && child.material.name.includes("Glass")) {
-            child.material = new THREE.MeshPhysicalMaterial({
-              transmission: 1, opacity: 1, metalness: 0, roughness: 0,
-              ior: 3, thickness: 0.01, specularIntensity: 1,
-              envMap: this.environmentMap, envMapIntensity: 1,
-              depthWrite: false, specularColor: 0xfbfbfb,
-            });
+            if (this.isMobile) {
+              child.material = new THREE.MeshStandardMaterial({
+                color: 0xfbfbfb, transparent: true, opacity: 0.25,
+                roughness: 0.1, metalness: 0.8,
+                envMap: this.environmentMap, envMapIntensity: 1.5,
+                depthWrite: false
+              });
+            } else {
+              child.material = new THREE.MeshPhysicalMaterial({
+                transmission: 1, opacity: 1, metalness: 0, roughness: 0,
+                ior: 3, thickness: 0.01, specularIntensity: 1,
+                envMap: this.environmentMap, envMapIntensity: 1,
+                depthWrite: false, specularColor: 0xfbfbfb,
+              });
+            }
           }
 
-          // 4. Computer Screen Video Texture
           if (child.name.includes("Computer_Screen")) {
             if (child.material) child.material.dispose();
             child.material = new THREE.MeshBasicMaterial({ map: this.videoTexture });
           }
 
-          // 5. RGB Fans shared material
           if (child.material && child.material.name.includes("RGB_Fan")) {
             if (child.material) child.material.dispose(); 
             child.material = this.sharedRgbMaterial; 
@@ -125,22 +152,25 @@ export default class Room {
       });
       
       this.scene.add(glb.scene); 
+      this.interactiveObjects = [...new Set([...this.raycastObjects, ...this.pointerObjects])];
     });
   }
 
   update(elapsedTime) {
-    // Animate fans
     this.vgaFans.forEach(fan => {
       fan.rotation.z += 0.01; 
     });
 
-    // Animate RGB material
+    if (this.chairTop && this.chairTop.userData.initialRotation) {
+      const rockSpeed = 1.2; 
+      const rockAmplitude = 0.3; 
+      this.chairTop.rotation.y = this.chairTop.userData.initialRotation.y + (Math.sin(elapsedTime * rockSpeed) * rockAmplitude);
+    }
+
     const hue = (elapsedTime * 0.3) % 1; 
     this.sharedRgbMaterial.color.setHSL(hue, 1, 0.5).multiplyScalar(2.5); 
 
-    // Smooth hover scaling for interactive objects
-    const interactables = [...new Set([...this.raycastObjects, ...this.pointerObjects])];
-    interactables.forEach(obj => {
+    this.interactiveObjects.forEach(obj => {
       if (obj.userData.targetScale) {
         obj.scale.lerp(obj.userData.targetScale, 0.15); 
       }

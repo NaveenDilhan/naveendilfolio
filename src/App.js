@@ -9,20 +9,60 @@ export default class App {
     this.canvas = document.querySelector(canvasId);
     this.size = { width: window.innerWidth, height: window.innerHeight };
     this.clock = new THREE.Clock();
+    
+    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
     this.initScene();
     this.initCamera();
     this.initRenderer();
-    this.initModals();     // Initialize Modals and UI logic
+    this.initModals();     
     this.initRaycaster(); 
     
-    // Initialize the Room Model
-    this.room = new Room(this.scene);
+    this.room = new Room(
+        this.scene, 
+        this.handleLoadProgress.bind(this), 
+        this.handleLoadComplete.bind(this)
+    );
 
     this.addEventListeners();
-    
-    // Start Render Loop
     this.render();
+  }
+
+  handleLoadProgress(progress) {
+    const percent = Math.round(progress * 100);
+    document.getElementById('progress-text').innerText = `${percent}%`;
+    gsap.to('#progress-bar', { width: `${percent}%`, duration: 0.3, ease: 'power1.out' });
+  }
+
+  handleLoadComplete() {
+    const finalCameraPos = this.camera.position.clone();
+
+    // Start lower and closer
+    this.camera.position.set(
+      finalCameraPos.x * 0.2, 
+      finalCameraPos.y * 0.3 + 1, 
+      finalCameraPos.z * 0.2
+    );
+
+    if (this.controls) this.controls.enabled = false;
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        if (this.controls) this.controls.enabled = true;
+      }
+    });
+    
+    tl.to('.loader-content', { opacity: 0, scale: 0.9, duration: 0.5, ease: 'power2.in' }) 
+      .to('#loading-screen', { opacity: 0, duration: 0.8, ease: 'power2.inOut', onComplete: () => {
+         document.getElementById('loading-screen').style.display = 'none'; 
+      }})
+      .to(this.camera.position, { 
+        x: finalCameraPos.x, 
+        y: finalCameraPos.y, 
+        z: finalCameraPos.z,
+        duration: 3.5, 
+        ease: 'power3.inOut' 
+      }, "-=0.6"); 
   }
 
   initScene() {
@@ -48,8 +88,7 @@ export default class App {
   }
 
   setupCameraView() {
-    const isMobile = window.innerWidth < 768;
-    const view = isMobile ? CAMERA_VIEWS.mobile : CAMERA_VIEWS.desktop;
+    const view = this.isMobile ? CAMERA_VIEWS.mobile : CAMERA_VIEWS.desktop;
 
     this.camera.position.copy(view.position);
     this.controls.target.copy(view.target);
@@ -62,9 +101,17 @@ export default class App {
   }
 
   initRenderer() {
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ 
+        canvas: this.canvas, 
+        antialias: !this.isMobile, 
+        powerPreference: "high-performance",
+        alpha: false,
+        stencil: false
+    });
     this.renderer.setSize(this.size.width, this.size.height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    
+    const pixelRatioTarget = this.isMobile ? 1.5 : 2;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioTarget));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   }
 
@@ -77,19 +124,15 @@ export default class App {
       contact: document.getElementById('modal-contact')
     };
 
-    // Close button logic
     document.querySelectorAll('.close-btn').forEach(btn => {
       btn.addEventListener('click', () => this.closeModal());
     });
-
-    // Click outside to close
     this.modalOverlay.addEventListener('click', () => this.closeModal());
   }
 
   openModal(type) {
-    if (this.controls) this.controls.enabled = false; // Stop room rotation
+    if (this.controls) this.controls.enabled = false; 
 
-    // Reset modals
     Object.values(this.modals).forEach(m => m.classList.remove('active'));
     
     const activeModal = this.modals[type];
@@ -98,7 +141,6 @@ export default class App {
     activeModal.classList.add('active');
     this.modalContainer.classList.add('active');
 
-    // Smooth Entrance with GSAP
     gsap.timeline()
       .to(this.modalContainer, { opacity: 1, duration: 0.3, ease: 'power2.out' })
       .fromTo(activeModal, 
@@ -109,11 +151,10 @@ export default class App {
   }
 
   closeModal() {
-    if (this.controls) this.controls.enabled = true; // Re-enable rotation
+    if (this.controls) this.controls.enabled = true; 
 
     const activeModal = document.querySelector('.modal-content.active');
 
-    // Smooth Exit with GSAP
     gsap.timeline({
       onComplete: () => {
         this.modalContainer.classList.remove('active');
@@ -127,20 +168,28 @@ export default class App {
   initRaycaster() {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(-2, -2); 
+    this.pointerDownPosition = new THREE.Vector2();
 
-    window.addEventListener('mousemove', (event) => {
+    window.addEventListener('pointermove', (event) => {
       this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
       this.mouse.y = -(event.clientY / this.size.height) * 2 + 1;
     });
 
-    window.addEventListener('click', () => {
-      if (!this.room) return;
-      
-      // Prevent raycasting if modal is currently open
-      if (this.modalContainer.classList.contains('active')) return;
+    window.addEventListener('pointerdown', (event) => {
+      this.pointerDownPosition.set(event.clientX, event.clientY);
+    });
 
-      const interactiveObjects = [...new Set([...this.room.raycastObjects, ...this.room.pointerObjects])];
+    window.addEventListener('pointerup', (event) => {
+      const distance = Math.hypot(event.clientX - this.pointerDownPosition.x, event.clientY - this.pointerDownPosition.y);
+      if (distance > 5) return; 
+
+      if (!this.room || this.modalContainer.classList.contains('active')) return;
+
+      const interactiveObjects = this.room.interactiveObjects;
       if (interactiveObjects.length === 0) return;
+
+      this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
+      this.mouse.y = -(event.clientY / this.size.height) * 2 + 1;
 
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const intersects = this.raycaster.intersectObjects(interactiveObjects, false);
@@ -148,10 +197,7 @@ export default class App {
       if (intersects.length > 0) {
         const clickedObject = intersects[0].object;
         const nameLower = clickedObject.name.toLowerCase();
-        
-        console.log('Object Clicked:', clickedObject.name);
 
-        // Social Links
         if (nameLower.includes('github')) {
           window.open('https://github.com/naveendilhan', '_blank');
         } else if (nameLower.includes('linkedin')) {
@@ -160,14 +206,9 @@ export default class App {
           window.open('https://instagram.com/your-profile', '_blank');
         } 
         
-        // Modals
-        if (nameLower.includes('works')) {
-          this.openModal('works');
-        } else if (nameLower.includes('about')) {
-          this.openModal('about');
-        } else if (nameLower.includes('contact')) {
-          this.openModal('contact');
-        }
+        if (nameLower.includes('works')) this.openModal('works');
+        else if (nameLower.includes('about')) this.openModal('about');
+        else if (nameLower.includes('contact')) this.openModal('contact');
       }
     });
   }
@@ -176,9 +217,17 @@ export default class App {
     window.addEventListener('resize', () => {
       this.size.width = window.innerWidth;
       this.size.height = window.innerHeight;
+      
+      const wasMobile = this.isMobile;
+      this.isMobile = window.innerWidth < 768; 
+
+      if (wasMobile !== this.isMobile) {
+          this.setupCameraView(); 
+      }
 
       this.renderer.setSize(this.size.width, this.size.height);
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      const pixelRatioTarget = this.isMobile ? 1.5 : 2;
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioTarget));
 
       this.camera.aspect = this.size.width / this.size.height;
       this.camera.updateProjectionMatrix();
@@ -189,54 +238,44 @@ export default class App {
     const elapsedTime = this.clock.getElapsedTime();
     this.controls.update(); 
 
-    if (this.room) {
-      const interactiveObjects = [...new Set([...this.room.raycastObjects, ...this.room.pointerObjects])];
+    if (this.room && this.room.interactiveObjects) {
+      const interactiveObjects = this.room.interactiveObjects;
       
       if (interactiveObjects.length > 0) {
-        // Reset scale every frame
         interactiveObjects.forEach(obj => {
           if (obj.userData.originalScale) {
             obj.userData.targetScale.copy(obj.userData.originalScale);
           }
         });
 
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-        const intersects = this.raycaster.intersectObjects(interactiveObjects, false);
-        
-        let shouldShowPointer = false;
+        if (!this.isMobile) {
+            this.raycaster.setFromCamera(this.mouse, this.camera);
+            const intersects = this.raycaster.intersectObjects(interactiveObjects, false);
+            
+            let shouldShowPointer = false;
 
-        if (intersects.length > 0 && !this.modalContainer.classList.contains('active')) {
-          const hoveredObject = intersects[0].object;
-          const nameLower = hoveredObject.name.toLowerCase();
+            if (intersects.length > 0 && !this.modalContainer.classList.contains('active')) {
+              const hoveredObject = intersects[0].object;
+              const nameLower = hoveredObject.name.toLowerCase();
 
-          const isPointerObject = nameLower.includes('pointer') || 
-                                  nameLower.includes('github') || 
-                                  nameLower.includes('linkedin') || 
-                                  nameLower.includes('instagram') ||
-                                  nameLower.includes('works') ||
-                                  nameLower.includes('about') ||
-                                  nameLower.includes('contact');
+              const isPointerObject = nameLower.includes('pointer') || 
+                                      nameLower.includes('github') || 
+                                      nameLower.includes('linkedin') || 
+                                      nameLower.includes('instagram') ||
+                                      nameLower.includes('works') ||
+                                      nameLower.includes('about') ||
+                                      nameLower.includes('contact');
 
-          if (isPointerObject) {
-            shouldShowPointer = true;
-          }
+              if (isPointerObject) shouldShowPointer = true;
 
-          const isRaycastObject = nameLower.includes('raycaster') || 
-                                  nameLower.includes('github') || 
-                                  nameLower.includes('linkedin') || 
-                                  nameLower.includes('instagram') ||
-                                  nameLower.includes('works') ||
-                                  nameLower.includes('about') ||
-                                  nameLower.includes('contact');
+              const isRaycastObject = nameLower.includes('raycaster') || isPointerObject;
 
-          // Scale up by 5% when hovered
-          if (isRaycastObject && hoveredObject.userData.originalScale) {
-            hoveredObject.userData.targetScale.copy(hoveredObject.userData.originalScale).multiplyScalar(1.2);
-          }
+              if (isRaycastObject && hoveredObject.userData.originalScale) {
+                hoveredObject.userData.targetScale.copy(hoveredObject.userData.originalScale).multiplyScalar(1.2);
+              }
+            }
+            document.body.style.cursor = shouldShowPointer ? 'pointer' : 'default';
         }
-
-        // Apply cursor style
-        document.body.style.cursor = shouldShowPointer ? 'pointer' : 'default';
       }
     }
 
