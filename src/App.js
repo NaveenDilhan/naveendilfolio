@@ -21,9 +21,8 @@ export default class App {
     this.initRenderer();
     this.initModals();     
     this.initRaycaster(); 
-    this.initThemeToggle(); // Initialize the Day/Night Button
+    this.initThemeToggle(); 
     
-    // Initialize Audio Manager
     this.audioManager = new AudioManager(); 
     
     this.room = new Room(
@@ -36,7 +35,6 @@ export default class App {
     this.render();
   }
 
-  // --- NEW: Theme Toggle Button Creation ---
   initThemeToggle() {
     const btn = document.createElement('button');
     btn.id = 'theme-toggle-btn';
@@ -48,11 +46,9 @@ export default class App {
     btn.addEventListener('click', () => {
       this.isNightMode = !this.isNightMode;
       
-      // Update Button UI
       btn.innerHTML = this.isNightMode ? '☀️' : '🌙';
       btn.classList.toggle('night-active', this.isNightMode);
       
-      // Trigger Scene transition
       if (this.room) {
         this.room.toggleNightMode(this.isNightMode);
       }
@@ -80,7 +76,6 @@ export default class App {
 
     if (this.controls) this.controls.enabled = false;
 
-    // --- Transform progress text into a "Click to Start" Button ---
     const progressText = document.getElementById('progress-text');
     const progressBar = document.getElementById('progress-bar');
 
@@ -89,21 +84,19 @@ export default class App {
       progressText.classList.add('start-btn'); 
     }
 
-    // Hide the progress bar so only the button is visible
     if (progressBar && progressBar.parentElement) {
        progressBar.parentElement.style.display = 'none';
     }
 
     const startExperience = () => {
-      window.removeEventListener('pointerdown', startExperience);
+      if (progressText) progressText.removeEventListener('click', startExperience);
       
-      // Since the user has now clicked, the browser will allow audio to play!
+      // Since it's a direct button click now, audio will securely unlock on mobile!
       this.audioManager.playInitialRandom(); 
 
       const tl = gsap.timeline({
         onComplete: () => {
           if (this.controls) this.controls.enabled = true;
-          // Fade in the day/night toggle button gracefully
           gsap.to('#theme-toggle-btn', { opacity: 1, scale: 1, duration: 0.5, pointerEvents: 'auto' });
         }
       });
@@ -121,8 +114,12 @@ export default class App {
         }, "-=0.6"); 
     };
 
-    // Wait for user interaction before fading the loading screen out
-    window.addEventListener('pointerdown', startExperience);
+    // FIX: Using explicit click on the button element instead of pointerdown on window
+    if (progressText) {
+      progressText.addEventListener('click', startExperience);
+    } else {
+      window.addEventListener('click', startExperience); // Fallback
+    }
   }
 
   initScene() {
@@ -236,10 +233,19 @@ export default class App {
 
     window.addEventListener('pointerdown', (event) => {
       this.pointerDownPosition.set(event.clientX, event.clientY);
+      // Immediately set mouse position so hover scales upon touch down
+      this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
+      this.mouse.y = -(event.clientY / this.size.height) * 2 + 1;
     });
 
     window.addEventListener('pointerup', (event) => {
       const distance = Math.hypot(event.clientX - this.pointerDownPosition.x, event.clientY - this.pointerDownPosition.y);
+      
+      // On mobile, reset mouse so objects shrink back after the finger is lifted
+      if (this.isMobile) {
+        setTimeout(() => { this.mouse.set(-2, -2); }, 100);
+      }
+
       if (distance > 5) return; 
 
       if (!this.room || this.modalContainer.classList.contains('active')) return;
@@ -273,6 +279,10 @@ export default class App {
         else if (nameLower.includes('about')) this.openModal('about');
         else if (nameLower.includes('contact')) this.openModal('contact');
       }
+    });
+
+    window.addEventListener('pointercancel', () => {
+      if (this.isMobile) this.mouse.set(-2, -2);
     });
   }
 
@@ -311,35 +321,34 @@ export default class App {
           }
         });
 
-        if (!this.isMobile) {
-            this.raycaster.setFromCamera(this.mouse, this.camera);
-            const intersects = this.raycaster.intersectObjects(interactiveObjects, false);
-            
-            let shouldShowPointer = false;
+        // FIX: Removed `if (!this.isMobile)` wrapper to allow raycaster scaling logic on mobile devices.
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const intersects = this.raycaster.intersectObjects(interactiveObjects, false);
+        
+        let shouldShowPointer = false;
 
-            if (intersects.length > 0 && !this.modalContainer.classList.contains('active')) {
-              const hoveredObject = intersects[0].object;
-              const nameLower = hoveredObject.name.toLowerCase();
+        if (intersects.length > 0 && !this.modalContainer.classList.contains('active')) {
+          const hoveredObject = intersects[0].object;
+          const nameLower = hoveredObject.name.toLowerCase();
 
-              const isPointerObject = nameLower.includes('pointer') || 
-                                      nameLower.includes('github') || 
-                                      nameLower.includes('linkedin') || 
-                                      nameLower.includes('instagram') ||
-                                      nameLower.includes('works') ||
-                                      nameLower.includes('about') ||
-                                      nameLower.includes('contact') ||
-                                      nameLower.includes('speaker'); 
+          const isPointerObject = nameLower.includes('pointer') || 
+                                  nameLower.includes('github') || 
+                                  nameLower.includes('linkedin') || 
+                                  nameLower.includes('instagram') ||
+                                  nameLower.includes('works') ||
+                                  nameLower.includes('about') ||
+                                  nameLower.includes('contact') ||
+                                  nameLower.includes('speaker'); 
 
-              if (isPointerObject) shouldShowPointer = true;
+          if (isPointerObject) shouldShowPointer = true;
 
-              const isRaycastObject = nameLower.includes('raycaster') || isPointerObject;
+          const isRaycastObject = nameLower.includes('raycaster') || isPointerObject;
 
-              if (isRaycastObject && hoveredObject.userData.originalScale) {
-                hoveredObject.userData.targetScale.copy(hoveredObject.userData.originalScale).multiplyScalar(1.2);
-              }
-            }
-            document.body.style.cursor = shouldShowPointer ? 'pointer' : 'default';
+          if (isRaycastObject && hoveredObject.userData.originalScale) {
+            hoveredObject.userData.targetScale.copy(hoveredObject.userData.originalScale).multiplyScalar(1.2);
+          }
         }
+        document.body.style.cursor = shouldShowPointer ? 'pointer' : 'default';
       }
     }
 

@@ -35,7 +35,6 @@ export default class AudioManager {
     }
   }
 
-  // Called from App.js after the user clicks "Click to Start"
   playInitialRandom() {
     this.bgm.play().then(() => {
         this.isPlaying = true;
@@ -53,6 +52,11 @@ export default class AudioManager {
 
   playClick() {
     if(!this.clickSound) return;
+    
+    // Prevent the audio from attempting to play if the loading screen is still active.
+    const loadingScreen = document.getElementById('loading-screen');
+    if (loadingScreen && loadingScreen.style.display !== 'none') return;
+    
     this.clickSound.currentTime = 0; 
     this.clickSound.play().catch(() => {}); 
   }
