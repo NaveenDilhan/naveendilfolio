@@ -4,14 +4,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { TEXTURE_MAP } from './config.js';
 import gsap from 'gsap'; 
 
-// --- NEW: Smoke Shader Strings ---
 const smokeVertexShader = `
 uniform float uTime;
 uniform sampler2D uPerlinTexture;
 
 varying vec2 vUv;
 
-// rotate2D function included directly
 vec2 rotate2D(vec2 value, float angle)
 {
     float s = sin(angle);
@@ -24,7 +22,6 @@ void main()
 {
     vec3 newPosition = position;
 
-    // Twist
     float twistPerlin = texture(
         uPerlinTexture,
         vec2(0.5, uv.y * 0.2 - uTime * 0.01)
@@ -32,7 +29,6 @@ void main()
     float angle = twistPerlin * 3.0;
     newPosition.xz = rotate2D(newPosition.xz, angle);
 
-    // Wind
     vec2 windOffset = vec2(
         texture(uPerlinTexture, vec2(0.25, uTime * 0.01)).r - 0.5,
         texture(uPerlinTexture, vec2(0.75, uTime * 0.01)).r - 0.5
@@ -40,10 +36,7 @@ void main()
     windOffset *= pow(uv.y, 2.0) * 1.5;
     newPosition.xz += windOffset;
 
-    // Final position
     gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
-
-    // Varyings
     vUv = uv;
 }
 `;
@@ -56,25 +49,19 @@ varying vec2 vUv;
 
 void main()
 {
-    // Scale and animate
     vec2 smokeUv = vUv;
     smokeUv.x *= 0.5;
     smokeUv.y *= 0.3;
     smokeUv.y -= uTime * 0.04;
 
-    // Smoke
     float smoke = texture(uPerlinTexture, smokeUv).r;
-
-    // Remap
     smoke = smoothstep(0.4, 1.0, smoke);
 
-    // Edges
     smoke *= smoothstep(0.0, 0.1, vUv.x);
     smoke *= smoothstep(1.0, 0.9, vUv.x);
     smoke *= smoothstep(0.0, 0.1, vUv.y);
     smoke *= smoothstep(1.0, 0.4, vUv.y);
 
-    // Final color
     gl_FragColor = vec4(1, 1, 1, smoke);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -91,6 +78,7 @@ export default class Room {
     this.raycastObjects = []; 
     this.pointerObjects = []; 
     this.interactiveObjects = []; 
+    this.interactiveGroups = []; // Tracks parent groups for scaling
     this.chairTop = null; 
     
     this.sceneMaterials = []; 
@@ -120,7 +108,7 @@ export default class Room {
     this.initVideo();
     this.initTextures();
     this.initRain(); 
-    this.initSmoke(); // --- NEW: Initialize Smoke ---
+    this.initSmoke(); 
     this.initModel();
   }
 
@@ -152,16 +140,13 @@ export default class Room {
     this.scene.add(this.rainSystem);
   }
 
-  // --- NEW: Setup the Smoke Material and Mesh ---
   initSmoke() {
     const textureLoader = new THREE.TextureLoader();
-    // Note: Make sure you add a 'perlin.webp' or 'perlin.png' to your public/textures/ folder
     this.perlinTexture = textureLoader.load('/shaders/perlin.png'); 
     this.perlinTexture.wrapS = THREE.RepeatWrapping;
     this.perlinTexture.wrapT = THREE.RepeatWrapping;
 
     const smokeGeometry = new THREE.PlaneGeometry(1, 2, 16, 64);
-    // Translate geometry so the bottom is at the origin (makes it scale/rotate from the base)
     smokeGeometry.translate(0, 1, 0); 
 
     this.smokeMaterial = new THREE.ShaderMaterial({
@@ -178,8 +163,6 @@ export default class Room {
     });
 
     this.smokeMesh = new THREE.Mesh(smokeGeometry, this.smokeMaterial);
-    
-    // Scale it down appropriately for a cup
     this.smokeMesh.scale.set(0.15, 0.4, 0.15);
   }
 
@@ -222,14 +205,11 @@ export default class Room {
     const gltfLoader = new GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);
 
-    gltfLoader.load("/models/Room_Portfolio_V4.glb", (glb) => {
+    gltfLoader.load("/models/Room_Portfolio_V5.glb", (glb) => {
       glb.scene.traverse((child) => {
         
-        // --- NEW: Attach Smoke to Cup ---
         if (child.name.toLowerCase().includes("cup")) {
           child.add(this.smokeMesh);
-          
-          // Adjust this offset depending on where your cup's origin point sits
           this.smokeMesh.position.set(0, 0.1, 0); 
         }
 
@@ -243,26 +223,24 @@ export default class Room {
         }
 
         if (child.isMesh) {
-          const nameLower = child.name.toLowerCase();
+          let interactiveGroup = null;
+          let currentParent = child;
+          let isInteractive = false;
+          let actionTargetName = child.name.toLowerCase();
 
-          const isInteractive = nameLower.includes("raycaster") || 
-                                nameLower.includes("pointer") || 
-                                nameLower.includes("github") || 
-                                nameLower.includes("linkedin") || 
-                                nameLower.includes("instagram") ||
-                                nameLower.includes("works") ||
-                                nameLower.includes("about") ||
-                                nameLower.includes("contact") ||
-                                nameLower.includes("cat");
-
-          if (isInteractive) {
-            child.userData.originalScale = child.scale.clone();
-            child.userData.targetScale = child.scale.clone();
-            
-            this.raycastObjects.push(child);
-            this.pointerObjects.push(child);
+          // Search hierarchy for an interactive name
+          while (currentParent) {
+            const parentNameLower = currentParent.name.toLowerCase();
+            if (parentNameLower.includes("raycaster") || parentNameLower.includes("pointer") || parentNameLower.includes("github") || parentNameLower.includes("linkedin") || parentNameLower.includes("instagram") || parentNameLower.includes("works") || parentNameLower.includes("about") || parentNameLower.includes("contact") || parentNameLower.includes("cat")) {
+                isInteractive = true;
+                actionTargetName = parentNameLower; 
+                interactiveGroup = currentParent; 
+                break;
+            }
+            currentParent = currentParent.parent;
           }
 
+          // Apply Materials
           const matchedKey = Object.keys(this.loadedTextures.day).find((key) => child.name.includes(key));
           if (matchedKey) {
             if (child.material) child.material.dispose();
@@ -340,6 +318,24 @@ export default class Room {
                 this.glassMaterials.push(child.material);
              }
           }
+
+          // Apply interactive properties and DoubleSide
+          if (isInteractive) {
+            if (!interactiveGroup.userData.originalScale) {
+                interactiveGroup.userData.originalScale = interactiveGroup.scale.clone();
+                interactiveGroup.userData.targetScale = interactiveGroup.scale.clone();
+                this.interactiveGroups.push(interactiveGroup);
+            }
+            child.userData.interactiveGroup = interactiveGroup;
+            child.userData.actionName = actionTargetName;
+            
+            if (child.material) {
+                child.material.side = THREE.DoubleSide; 
+            }
+
+            this.raycastObjects.push(child);
+            this.pointerObjects.push(child);
+          }
         }
       });
       
@@ -378,7 +374,6 @@ export default class Room {
       ease: 'power2.inOut'
     });
 
-    // --- NEW: Dim Smoke slightly at night (Optional) ---
     if (this.smokeMaterial) {
        gsap.to(this.smokeMaterial, {
          opacity: isNight ? 0.4 : 1.0,
@@ -402,11 +397,12 @@ export default class Room {
     const hue = (elapsedTime * 0.3) % 1; 
     this.sharedRgbMaterial.color.setHSL(hue, 1, 0.5).multiplyScalar(2.5); 
 
-    this.interactiveObjects.forEach(obj => {
-      if (obj.userData.targetScale) {
-        obj.scale.lerp(obj.userData.targetScale, 0.15); 
-      }
-    });
+    // Scale the Parent Groups
+    if (this.interactiveGroups) {
+      this.interactiveGroups.forEach(group => {
+        if (group.userData.targetScale) group.scale.lerp(group.userData.targetScale, 0.15); 
+      });
+    }
 
     this.swayMaterials.forEach(mat => {
       if (mat.userData.shaderUniforms) {
@@ -414,7 +410,6 @@ export default class Room {
       }
     });
 
-    // --- NEW: Update Time for Smoke Shader ---
     if (this.smokeMaterial && this.smokeMaterial.uniforms) {
        this.smokeMaterial.uniforms.uTime.value = elapsedTime;
     }

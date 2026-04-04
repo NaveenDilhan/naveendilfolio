@@ -357,48 +357,52 @@ export default class App {
     });
   }
 
-  render() {
+render() {
     const elapsedTime = this.clock.getElapsedTime();
     this.controls.update(); 
 
     if (this.room && this.room.interactiveObjects) {
-      const interactiveObjects = this.room.interactiveObjects;
       
-      if (interactiveObjects.length > 0) {
-        interactiveObjects.forEach(obj => {
-          if (obj.userData.originalScale) {
-            obj.userData.targetScale.copy(obj.userData.originalScale);
+      // Reset all GROUPS back to normal scale every frame
+      if (this.room.interactiveGroups) {
+        this.room.interactiveGroups.forEach(group => {
+          if (group.userData.originalScale) {
+             group.userData.targetScale.copy(group.userData.originalScale);
           }
         });
+      }
 
+      if (this.room.interactiveObjects.length > 0) {
         this.raycaster.setFromCamera(this.mouse, this.camera);
-        const intersects = this.raycaster.intersectObjects(interactiveObjects, false);
+        const intersects = this.raycaster.intersectObjects(this.room.interactiveObjects, false);
         
         let shouldShowPointer = false;
         let isCatHoveredThisFrame = false; 
 
         if (intersects.length > 0 && !this.modalContainer.classList.contains('active')) {
           const hoveredObject = intersects[0].object;
-          const nameLower = hoveredObject.name.toLowerCase();
+          const interactiveGroup = hoveredObject.userData.interactiveGroup; // Get the parent!
+          
+          const actionNameLower = hoveredObject.userData.actionName || hoveredObject.name.toLowerCase();
 
-          const isPointerObject = nameLower.includes('pointer') || 
-                                  nameLower.includes('github') || 
-                                  nameLower.includes('linkedin') || 
-                                  nameLower.includes('instagram') ||
-                                  nameLower.includes('works') ||
-                                  nameLower.includes('about') ||
-                                  nameLower.includes('contact') ||
-                                  nameLower.includes('speaker') ||
-                                  nameLower.includes('cat'); 
+          const isPointerObject = actionNameLower.includes('pointer') || 
+                                  actionNameLower.includes('github') || 
+                                  actionNameLower.includes('linkedin') || 
+                                  actionNameLower.includes('instagram') ||
+                                  actionNameLower.includes('works') ||
+                                  actionNameLower.includes('about') ||
+                                  actionNameLower.includes('contact') ||
+                                  actionNameLower.includes('speaker') ||
+                                  actionNameLower.includes('cat'); 
 
           if (isPointerObject) shouldShowPointer = true;
+          if (actionNameLower.includes('cat')) isCatHoveredThisFrame = true;
 
-          if (nameLower.includes('cat')) isCatHoveredThisFrame = true;
+          const isRaycastObject = actionNameLower.includes('raycaster') || isPointerObject;
 
-          const isRaycastObject = nameLower.includes('raycaster') || isPointerObject;
-
-          if (isRaycastObject && hoveredObject.userData.originalScale) {
-            hoveredObject.userData.targetScale.copy(hoveredObject.userData.originalScale).multiplyScalar(1.2);
+          // Scale the PARENT GROUP, not the flat plane mesh
+          if (isRaycastObject && interactiveGroup && interactiveGroup.userData.originalScale) {
+            interactiveGroup.userData.targetScale.copy(interactiveGroup.userData.originalScale).multiplyScalar(1.2);
           }
         }
         
