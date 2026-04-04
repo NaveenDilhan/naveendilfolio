@@ -4,6 +4,83 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { TEXTURE_MAP } from './config.js';
 import gsap from 'gsap'; 
 
+// --- NEW: Smoke Shader Strings ---
+const smokeVertexShader = `
+uniform float uTime;
+uniform sampler2D uPerlinTexture;
+
+varying vec2 vUv;
+
+// rotate2D function included directly
+vec2 rotate2D(vec2 value, float angle)
+{
+    float s = sin(angle);
+    float c = cos(angle);
+    mat2 m = mat2(c, s, -s, c);
+    return m * value;
+}
+
+void main()
+{
+    vec3 newPosition = position;
+
+    // Twist
+    float twistPerlin = texture(
+        uPerlinTexture,
+        vec2(0.5, uv.y * 0.2 - uTime * 0.01)
+    ).r;
+    float angle = twistPerlin * 3.0;
+    newPosition.xz = rotate2D(newPosition.xz, angle);
+
+    // Wind
+    vec2 windOffset = vec2(
+        texture(uPerlinTexture, vec2(0.25, uTime * 0.01)).r - 0.5,
+        texture(uPerlinTexture, vec2(0.75, uTime * 0.01)).r - 0.5
+    );
+    windOffset *= pow(uv.y, 2.0) * 1.5;
+    newPosition.xz += windOffset;
+
+    // Final position
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+
+    // Varyings
+    vUv = uv;
+}
+`;
+
+const smokeFragmentShader = `
+uniform float uTime;
+uniform sampler2D uPerlinTexture;
+
+varying vec2 vUv;
+
+void main()
+{
+    // Scale and animate
+    vec2 smokeUv = vUv;
+    smokeUv.x *= 0.5;
+    smokeUv.y *= 0.3;
+    smokeUv.y -= uTime * 0.04;
+
+    // Smoke
+    float smoke = texture(uPerlinTexture, smokeUv).r;
+
+    // Remap
+    smoke = smoothstep(0.4, 1.0, smoke);
+
+    // Edges
+    smoke *= smoothstep(0.0, 0.1, vUv.x);
+    smoke *= smoothstep(1.0, 0.9, vUv.x);
+    smoke *= smoothstep(0.0, 0.1, vUv.y);
+    smoke *= smoothstep(1.0, 0.4, vUv.y);
+
+    // Final color
+    gl_FragColor = vec4(1, 1, 1, smoke);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+}
+`;
+
 export default class Room {
   constructor(scene, onProgress, onLoad) {
     this.scene = scene;
@@ -18,7 +95,7 @@ export default class Room {
     
     this.sceneMaterials = []; 
     this.glassMaterials = [];
-    this.swayMaterials = []; // --- NEW: Track materials that need wind animation ---
+    this.swayMaterials = []; 
     this.isNight = false;
     
     this.sharedRgbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
@@ -43,6 +120,7 @@ export default class Room {
     this.initVideo();
     this.initTextures();
     this.initRain(); 
+    this.initSmoke(); // --- NEW: Initialize Smoke ---
     this.initModel();
   }
 
@@ -72,6 +150,37 @@ export default class Room {
 
     this.rainSystem = new THREE.Points(this.rainGeometry, this.rainMaterial);
     this.scene.add(this.rainSystem);
+  }
+
+  // --- NEW: Setup the Smoke Material and Mesh ---
+  initSmoke() {
+    const textureLoader = new THREE.TextureLoader();
+    // Note: Make sure you add a 'perlin.webp' or 'perlin.png' to your public/textures/ folder
+    this.perlinTexture = textureLoader.load('/shaders/perlin.png'); 
+    this.perlinTexture.wrapS = THREE.RepeatWrapping;
+    this.perlinTexture.wrapT = THREE.RepeatWrapping;
+
+    const smokeGeometry = new THREE.PlaneGeometry(1, 2, 16, 64);
+    // Translate geometry so the bottom is at the origin (makes it scale/rotate from the base)
+    smokeGeometry.translate(0, 1, 0); 
+
+    this.smokeMaterial = new THREE.ShaderMaterial({
+      vertexShader: smokeVertexShader,
+      fragmentShader: smokeFragmentShader,
+      uniforms: {
+        uTime: new THREE.Uniform(0),
+        uPerlinTexture: new THREE.Uniform(this.perlinTexture)
+      },
+      side: THREE.DoubleSide,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.NormalBlending
+    });
+
+    this.smokeMesh = new THREE.Mesh(smokeGeometry, this.smokeMaterial);
+    
+    // Scale it down appropriately for a cup
+    this.smokeMesh.scale.set(0.15, 0.4, 0.15);
   }
 
   initVideo() {
@@ -116,6 +225,14 @@ export default class Room {
     gltfLoader.load("/models/Room_Portfolio_V4.glb", (glb) => {
       glb.scene.traverse((child) => {
         
+        // --- NEW: Attach Smoke to Cup ---
+        if (child.name.toLowerCase().includes("cup")) {
+          child.add(this.smokeMesh);
+          
+          // Adjust this offset depending on where your cup's origin point sits
+          this.smokeMesh.position.set(0, 0.1, 0); 
+        }
+
         if (child.name.toLowerCase().includes("chair_top")) {
           this.chairTop = child;
           this.chairTop.userData.initialRotation = child.rotation.clone();
@@ -186,35 +303,24 @@ export default class Room {
             child.material = this.sharedRgbMaterial; 
           }
 
-          // --- NEW: Med_Plant Vertex Shader Animation ---
           if (child.name.includes("Med_Plant") && child.material) {
-            // Clone material so we don't accidentally warp other objects sharing the texture
             child.material = child.material.clone();
-            
-            // Set up uniform for time
             child.material.userData.shaderUniforms = { uTime: { value: 0 } };
 
             child.material.onBeforeCompile = (shader) => {
               shader.uniforms.uTime = child.material.userData.shaderUniforms.uTime;
               
-              // Inject time variable
               shader.vertexShader = `
                 uniform float uTime;
                 ${shader.vertexShader}
               `;
               
-              // Inject displacement logic
               shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `
                 #include <begin_vertex>
                 
-                // Calculate how high the vertex is. 
-                // The max() ensures values below the threshold stay 0 (pot won't move).
-                // If the pot is swaying slightly, increase '0.1' to '0.3' or higher.
                 float heightFactor = max(0.0, position.y - 0.1); 
-                
-                // Sine wave for smooth wind oscillation 
                 float windX = sin(uTime * 1.5 + position.x) * 0.03 * heightFactor;
                 float windZ = cos(uTime * 1.2 + position.z) * 0.03 * heightFactor;
                 
@@ -271,6 +377,15 @@ export default class Room {
       duration: duration,
       ease: 'power2.inOut'
     });
+
+    // --- NEW: Dim Smoke slightly at night (Optional) ---
+    if (this.smokeMaterial) {
+       gsap.to(this.smokeMaterial, {
+         opacity: isNight ? 0.4 : 1.0,
+         duration: duration,
+         ease: 'power2.inOut'
+       });
+    }
   }
 
   update(elapsedTime) {
@@ -293,12 +408,16 @@ export default class Room {
       }
     });
 
-    // --- NEW: Update Time for Plant Shader ---
     this.swayMaterials.forEach(mat => {
       if (mat.userData.shaderUniforms) {
         mat.userData.shaderUniforms.uTime.value = elapsedTime;
       }
     });
+
+    // --- NEW: Update Time for Smoke Shader ---
+    if (this.smokeMaterial && this.smokeMaterial.uniforms) {
+       this.smokeMaterial.uniforms.uTime.value = elapsedTime;
+    }
 
     if (this.isNight || this.rainMaterial.opacity > 0) {
       const positions = this.rainGeometry.attributes.position.array;
