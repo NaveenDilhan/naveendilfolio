@@ -231,13 +231,50 @@ body {
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  font-family: $font-content; 
+  font-family: $font-content;
+  overflow: hidden; /* Important: Prevents edge scrolling */
+}
+
+/* Continuous Grassy Silhouette Overlay */
+.grass-overlay {
+  position: absolute;
+  bottom: -2px; 
+  left: 0;
+  width: 100vw;
+  height: 20vh; /* Scales with screen height nicely */
+  min-height: 120px;
+  max-height: 180px; /* Caps height so the pattern never tiles vertically */
+  z-index: 1; /* Sits securely behind text */
+  pointer-events: none;
+  filter: drop-shadow(0 -5px 25px rgba(20, 41, 28, 0.4));
+}
+
+.grass-rect-back {
+  transform-origin: bottom center;
+  animation: swayBack 6s ease-in-out infinite alternate;
+}
+
+.grass-rect-front {
+  transform-origin: bottom center;
+  animation: swayFront 4s ease-in-out infinite alternate;
+}
+
+@keyframes swayBack {
+  0% { transform: skewX(-3deg) scaleY(0.95); }
+  100% { transform: skewX(4deg) scaleY(1.05); }
+}
+
+@keyframes swayFront {
+  0% { transform: skewX(4deg) scaleY(1.02); }
+  100% { transform: skewX(-2deg) scaleY(0.98); }
 }
 
 .loader-content {
   text-align: center;
   width: 80%;
   max-width: 350px;
+  z-index: 2; /* Ensures text is always readable above grass */
+  position: relative;
 }
 
 .cute-icon {
@@ -306,6 +343,21 @@ body {
   font-size: 1.2rem;
   font-weight: 600;
   color: #ffb1cb;
+}
+
+/* NEW: Desktop Note Styling */
+.desktop-note {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6); /* Soft, semi-transparent white */
+  margin-top: 20px;
+  font-weight: 300;
+  letter-spacing: 1px;
+  animation: pulseOpacity 4s ease-in-out infinite;
+}
+
+@keyframes pulseOpacity {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
 }
 
 /* --- MUSIC PLAYER --- */

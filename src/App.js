@@ -270,9 +270,9 @@ export default class App {
         if (nameLower.includes('github')) {
           window.open('https://github.com/naveendilhan', '_blank');
         } else if (nameLower.includes('linkedin')) {
-          window.open('https://linkedin.com/in/your-profile', '_blank');
+          window.open('https://www.linkedin.com/in/naveen-wickramasinghe/', '_blank');
         } else if (nameLower.includes('instagram')) {
-          window.open('https://instagram.com/your-profile', '_blank');
+          window.open('https://www.instagram.com/nauuveeyn/', '_blank');
         } 
         
         if (nameLower.includes('works')) this.openModal('works');

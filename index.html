@@ -8,7 +8,48 @@
   </head>
   <body>
     
-<div id="loading-screen">
+    <div id="loading-screen">
+      <div class="grass-overlay">
+        <svg width="110%" height="100%" preserveAspectRatio="none" style="transform: translateX(-5%);">
+          <defs>
+            <pattern id="grass-back" x="0" y="0" width="300" height="200" patternUnits="userSpaceOnUse">
+              <path d="M 10 200 Q 20 100 5 30 Q 30 100 30 200 Z" fill="#14291c"/>
+              <path d="M 25 200 Q 35 120 50 20 Q 45 130 50 200 Z" fill="#14291c"/>
+              <path d="M 45 200 Q 55 80 70 10 Q 65 90 70 200 Z" fill="#14291c"/>
+              <path d="M 65 200 Q 75 140 60 50 Q 85 140 90 200 Z" fill="#14291c"/>
+              <path d="M 85 200 Q 95 90 115 15 Q 105 100 110 200 Z" fill="#14291c"/>
+              <path d="M 105 200 Q 115 110 100 40 Q 125 120 130 200 Z" fill="#14291c"/>
+              <path d="M 125 200 Q 135 80 155 10 Q 145 90 150 200 Z" fill="#14291c"/>
+              <path d="M 145 200 Q 155 130 170 30 Q 165 140 170 200 Z" fill="#14291c"/>
+              <path d="M 165 200 Q 175 90 195 20 Q 185 100 190 200 Z" fill="#14291c"/>
+              <path d="M 185 200 Q 195 120 180 40 Q 205 130 210 200 Z" fill="#14291c"/>
+              <path d="M 205 200 Q 215 80 235 15 Q 225 90 230 200 Z" fill="#14291c"/>
+              <path d="M 225 200 Q 235 140 220 50 Q 245 140 250 200 Z" fill="#14291c"/>
+              <path d="M 245 200 Q 255 90 275 10 Q 265 100 270 200 Z" fill="#14291c"/>
+              <path d="M 265 200 Q 275 110 260 40 Q 285 120 290 200 Z" fill="#14291c"/>
+              <path d="M 285 200 Q 295 80 315 20 Q 305 90 310 200 Z" fill="#14291c"/>
+              <rect x="0" y="195" width="300" height="5" fill="#14291c"/>
+            </pattern>
+            <pattern id="grass-front" x="0" y="0" width="200" height="200" patternUnits="userSpaceOnUse">
+              <path d="M 0 200 Q 10 100 5 40 Q 20 110 20 200 Z" fill="#080c09"/>
+              <path d="M 15 200 Q 25 120 40 20 Q 35 130 40 200 Z" fill="#080c09"/>
+              <path d="M 35 200 Q 40 150 25 70 Q 50 160 55 200 Z" fill="#080c09"/>
+              <path d="M 50 200 Q 60 90 75 30 Q 70 100 75 200 Z" fill="#080c09"/>
+              <path d="M 70 200 Q 80 140 65 60 Q 90 150 95 200 Z" fill="#080c09"/>
+              <path d="M 90 200 Q 100 80 120 10 Q 110 90 115 200 Z" fill="#080c09"/>
+              <path d="M 110 200 Q 120 130 105 50 Q 130 140 135 200 Z" fill="#080c09"/>
+              <path d="M 130 200 Q 140 100 155 30 Q 150 110 155 200 Z" fill="#080c09"/>
+              <path d="M 150 200 Q 160 150 145 70 Q 170 160 175 200 Z" fill="#080c09"/>
+              <path d="M 170 200 Q 180 90 195 20 Q 190 100 195 200 Z" fill="#080c09"/>
+              <path d="M 190 200 Q 200 140 185 60 Q 210 150 215 200 Z" fill="#080c09"/>
+              <rect x="0" y="195" width="200" height="5" fill="#080c09"/>
+            </pattern>
+          </defs>
+          <rect class="grass-rect-back" x="0" y="0" width="100%" height="100%" fill="url(#grass-back)" />
+          <rect class="grass-rect-front" x="0" y="0" width="100%" height="100%" fill="url(#grass-front)" />
+        </svg>
+      </div>
+
       <div class="loader-content">
         <div class="cute-icon">🌱</div>
         <h1 class="loader-title">Welcome to my Portfolio</h1>
@@ -17,11 +58,12 @@
           <div id="progress-bar"></div>
         </div>
         <div id="progress-text">0%</div>
+
+        <p class="desktop-note">Best experienced on a PC/Desktop</p>
         
         <button id="enter-btn" class="contact-button" style="display: none; margin-top: 20px;">
-      Enter Room ✨
-    </button>
-    
+          Enter Room ✨
+        </button>
       </div>
     </div>
 
@@ -47,11 +89,11 @@
         <button class="close-btn">&times;</button>
         <h2>Contact</h2>
         <p>Let's build something amazing together.</p>
-        <a href="mailto:your-email@example.com" class="contact-button">Email Me</a>
+        <a href="mailto:naveendilhanwic@gmail.com" class="contact-button">Email Me</a>
       </div>
     </div>
 
-<div id="music-player" class="glass-player">
+    <div id="music-player" class="glass-player">
       <div class="track-info">
         <div id="track-name">Track Name</div>
         <div id="track-artist">Artist</div>
