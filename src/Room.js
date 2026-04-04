@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { TEXTURE_MAP } from './config.js';
+import gsap from 'gsap'; // Added GSAP for material color transitions
 
 export default class Room {
   constructor(scene, onProgress, onLoad) {
@@ -14,6 +15,11 @@ export default class Room {
     this.pointerObjects = []; 
     this.interactiveObjects = []; 
     this.chairTop = null; 
+    
+    // Arrays to hold materials for nighttime tinting
+    this.sceneMaterials = []; 
+    this.glassMaterials = [];
+    this.isNight = false;
     
     this.sharedRgbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
     this.loadedTextures = { day: {} };
@@ -36,7 +42,37 @@ export default class Room {
 
     this.initVideo();
     this.initTextures();
+    this.initRain(); // Initialize rain particles
     this.initModel();
+  }
+
+  // --- NEW: Performant Particle Rain System ---
+  initRain() {
+    const rainCount = 2000;
+    this.rainGeometry = new THREE.BufferGeometry();
+    const rainPositions = new Float32Array(rainCount * 3);
+    this.rainVelocities = [];
+
+    for (let i = 0; i < rainCount; i++) {
+      rainPositions[i * 3] = (Math.random() - 0.5) * 25; // x spread
+      rainPositions[i * 3 + 1] = Math.random() * 20;     // y height
+      rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 25; // z spread
+      this.rainVelocities.push(0.15 + Math.random() * 0.1);  // fall speed
+    }
+
+    this.rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+
+    this.rainMaterial = new THREE.PointsMaterial({
+      color: 0xaaccff,
+      size: 0.06,
+      transparent: true,
+      opacity: 0, // Starts invisible (daytime)
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+
+    this.rainSystem = new THREE.Points(this.rainGeometry, this.rainMaterial);
+    this.scene.add(this.rainSystem);
   }
 
   initVideo() {
@@ -114,7 +150,8 @@ export default class Room {
           if (matchedKey) {
             if (child.material) child.material.dispose();
             child.material = new THREE.MeshBasicMaterial({ 
-              map: this.loadedTextures.day[matchedKey] 
+              map: this.loadedTextures.day[matchedKey],
+              color: 0xffffff // Ensure base color is white initially
             });
             if (child.material.map) {
               child.material.map.minFilter = THREE.LinearFilter;
@@ -148,11 +185,57 @@ export default class Room {
             if (child.material) child.material.dispose(); 
             child.material = this.sharedRgbMaterial; 
           }
+
+          // --- Collect Materials for Tinting ---
+          if (child.material) {
+             // Avoid tinting screens, RGB fans, or glass with the global dark tint
+             if (!child.name.includes("Computer_Screen") && !child.material.name.includes("RGB_Fan") && !child.material.name.includes("Glass")) {
+                this.sceneMaterials.push(child.material);
+             } else if (child.material.name.includes("Glass")) {
+                this.glassMaterials.push(child.material);
+             }
+          }
         }
       });
       
       this.scene.add(glb.scene); 
       this.interactiveObjects = [...new Set([...this.raycastObjects, ...this.pointerObjects])];
+    });
+  }
+
+  // --- NEW: Toggle Night Mode Method ---
+  toggleNightMode(isNight) {
+    this.isNight = isNight;
+    
+    // Tint color: Dark moody blue for night, pure white (original) for day
+    const targetColor = isNight ? new THREE.Color(0x2b3044) : new THREE.Color(0xffffff);
+    const duration = 2; // Smooth 2 second transition
+
+    // Tint all regular objects smoothly
+    this.sceneMaterials.forEach(mat => {
+      if (mat.color) {
+        gsap.to(mat.color, {
+          r: targetColor.r, g: targetColor.g, b: targetColor.b,
+          duration: duration,
+          ease: 'power2.inOut'
+        });
+      }
+    });
+
+    // Dim glass reflections
+    this.glassMaterials.forEach(mat => {
+      gsap.to(mat, {
+        envMapIntensity: isNight ? 0.1 : (this.isMobile ? 1.5 : 1),
+        duration: duration,
+        ease: 'power2.inOut'
+      });
+    });
+
+    // Fade rain in/out
+    gsap.to(this.rainMaterial, {
+      opacity: isNight ? 0.6 : 0,
+      duration: duration,
+      ease: 'power2.inOut'
     });
   }
 
@@ -175,5 +258,20 @@ export default class Room {
         obj.scale.lerp(obj.userData.targetScale, 0.15); 
       }
     });
+
+    // --- NEW: Animate Rain Physics ---
+    if (this.isNight || this.rainMaterial.opacity > 0) {
+      const positions = this.rainGeometry.attributes.position.array;
+      for (let i = 0; i < this.rainVelocities.length; i++) {
+        positions[i * 3 + 1] -= this.rainVelocities[i]; // drop y
+        positions[i * 3] -= 0.02; // slight wind on x
+
+        if (positions[i * 3 + 1] < -2) { // Reset at bottom
+          positions[i * 3 + 1] = 10 + Math.random() * 5;
+          positions[i * 3] = (Math.random() - 0.5) * 25; // Reset X to prevent drift
+        }
+      }
+      this.rainGeometry.attributes.position.needsUpdate = true;
+    }
   }
 }

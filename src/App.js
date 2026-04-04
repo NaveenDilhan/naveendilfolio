@@ -21,6 +21,7 @@ export default class App {
     this.initRenderer();
     this.initModals();     
     this.initRaycaster(); 
+    this.initThemeToggle(); // Initialize the Day/Night Button
     
     // Initialize Audio Manager
     this.audioManager = new AudioManager(); 
@@ -33,6 +34,29 @@ export default class App {
 
     this.addEventListeners();
     this.render();
+  }
+
+  // --- NEW: Theme Toggle Button Creation ---
+  initThemeToggle() {
+    const btn = document.createElement('button');
+    btn.id = 'theme-toggle-btn';
+    btn.innerHTML = '🌙';
+    document.body.appendChild(btn);
+
+    this.isNightMode = false;
+
+    btn.addEventListener('click', () => {
+      this.isNightMode = !this.isNightMode;
+      
+      // Update Button UI
+      btn.innerHTML = this.isNightMode ? '☀️' : '🌙';
+      btn.classList.toggle('night-active', this.isNightMode);
+      
+      // Trigger Scene transition
+      if (this.room) {
+        this.room.toggleNightMode(this.isNightMode);
+      }
+    });
   }
 
   handleLoadProgress(progress) {
@@ -79,6 +103,8 @@ export default class App {
       const tl = gsap.timeline({
         onComplete: () => {
           if (this.controls) this.controls.enabled = true;
+          // Fade in the day/night toggle button gracefully
+          gsap.to('#theme-toggle-btn', { opacity: 1, scale: 1, duration: 0.5, pointerEvents: 'auto' });
         }
       });
       
