@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { TEXTURE_MAP } from './config.js';
-import gsap from 'gsap'; // Added GSAP for material color transitions
+import gsap from 'gsap'; 
 
 export default class Room {
   constructor(scene, onProgress, onLoad) {
@@ -16,9 +16,9 @@ export default class Room {
     this.interactiveObjects = []; 
     this.chairTop = null; 
     
-    // Arrays to hold materials for nighttime tinting
     this.sceneMaterials = []; 
     this.glassMaterials = [];
+    this.swayMaterials = []; // --- NEW: Track materials that need wind animation ---
     this.isNight = false;
     
     this.sharedRgbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
@@ -42,11 +42,10 @@ export default class Room {
 
     this.initVideo();
     this.initTextures();
-    this.initRain(); // Initialize rain particles
+    this.initRain(); 
     this.initModel();
   }
 
-  // --- NEW: Performant Particle Rain System ---
   initRain() {
     const rainCount = 2000;
     this.rainGeometry = new THREE.BufferGeometry();
@@ -54,10 +53,10 @@ export default class Room {
     this.rainVelocities = [];
 
     for (let i = 0; i < rainCount; i++) {
-      rainPositions[i * 3] = (Math.random() - 0.5) * 25; // x spread
-      rainPositions[i * 3 + 1] = Math.random() * 20;     // y height
-      rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 25; // z spread
-      this.rainVelocities.push(0.15 + Math.random() * 0.1);  // fall speed
+      rainPositions[i * 3] = (Math.random() - 0.5) * 25; 
+      rainPositions[i * 3 + 1] = Math.random() * 20;     
+      rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 25; 
+      this.rainVelocities.push(0.15 + Math.random() * 0.1);  
     }
 
     this.rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
@@ -66,7 +65,7 @@ export default class Room {
       color: 0xaaccff,
       size: 0.06,
       transparent: true,
-      opacity: 0, // Starts invisible (daytime)
+      opacity: 0, 
       depthWrite: false,
       blending: THREE.AdditiveBlending
     });
@@ -136,7 +135,8 @@ export default class Room {
                                 nameLower.includes("instagram") ||
                                 nameLower.includes("works") ||
                                 nameLower.includes("about") ||
-                                nameLower.includes("contact");
+                                nameLower.includes("contact") ||
+                                nameLower.includes("cat");
 
           if (isInteractive) {
             child.userData.originalScale = child.scale.clone();
@@ -151,7 +151,7 @@ export default class Room {
             if (child.material) child.material.dispose();
             child.material = new THREE.MeshBasicMaterial({ 
               map: this.loadedTextures.day[matchedKey],
-              color: 0xffffff // Ensure base color is white initially
+              color: 0xffffff 
             });
             if (child.material.map) {
               child.material.map.minFilter = THREE.LinearFilter;
@@ -186,9 +186,48 @@ export default class Room {
             child.material = this.sharedRgbMaterial; 
           }
 
-          // --- Collect Materials for Tinting ---
+          // --- NEW: Med_Plant Vertex Shader Animation ---
+          if (child.name.includes("Med_Plant") && child.material) {
+            // Clone material so we don't accidentally warp other objects sharing the texture
+            child.material = child.material.clone();
+            
+            // Set up uniform for time
+            child.material.userData.shaderUniforms = { uTime: { value: 0 } };
+
+            child.material.onBeforeCompile = (shader) => {
+              shader.uniforms.uTime = child.material.userData.shaderUniforms.uTime;
+              
+              // Inject time variable
+              shader.vertexShader = `
+                uniform float uTime;
+                ${shader.vertexShader}
+              `;
+              
+              // Inject displacement logic
+              shader.vertexShader = shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                `
+                #include <begin_vertex>
+                
+                // Calculate how high the vertex is. 
+                // The max() ensures values below the threshold stay 0 (pot won't move).
+                // If the pot is swaying slightly, increase '0.1' to '0.3' or higher.
+                float heightFactor = max(0.0, position.y - 0.1); 
+                
+                // Sine wave for smooth wind oscillation 
+                float windX = sin(uTime * 1.5 + position.x) * 0.03 * heightFactor;
+                float windZ = cos(uTime * 1.2 + position.z) * 0.03 * heightFactor;
+                
+                transformed.x += windX;
+                transformed.z += windZ;
+                `
+              );
+            };
+            
+            this.swayMaterials.push(child.material);
+          }
+
           if (child.material) {
-             // Avoid tinting screens, RGB fans, or glass with the global dark tint
              if (!child.name.includes("Computer_Screen") && !child.material.name.includes("RGB_Fan") && !child.material.name.includes("Glass")) {
                 this.sceneMaterials.push(child.material);
              } else if (child.material.name.includes("Glass")) {
@@ -203,15 +242,12 @@ export default class Room {
     });
   }
 
-  // --- NEW: Toggle Night Mode Method ---
   toggleNightMode(isNight) {
     this.isNight = isNight;
     
-    // Tint color: Dark moody blue for night, pure white (original) for day
     const targetColor = isNight ? new THREE.Color(0x2b3044) : new THREE.Color(0xffffff);
-    const duration = 2; // Smooth 2 second transition
+    const duration = 2; 
 
-    // Tint all regular objects smoothly
     this.sceneMaterials.forEach(mat => {
       if (mat.color) {
         gsap.to(mat.color, {
@@ -222,7 +258,6 @@ export default class Room {
       }
     });
 
-    // Dim glass reflections
     this.glassMaterials.forEach(mat => {
       gsap.to(mat, {
         envMapIntensity: isNight ? 0.1 : (this.isMobile ? 1.5 : 1),
@@ -231,7 +266,6 @@ export default class Room {
       });
     });
 
-    // Fade rain in/out
     gsap.to(this.rainMaterial, {
       opacity: isNight ? 0.6 : 0,
       duration: duration,
@@ -259,16 +293,22 @@ export default class Room {
       }
     });
 
-    // --- NEW: Animate Rain Physics ---
+    // --- NEW: Update Time for Plant Shader ---
+    this.swayMaterials.forEach(mat => {
+      if (mat.userData.shaderUniforms) {
+        mat.userData.shaderUniforms.uTime.value = elapsedTime;
+      }
+    });
+
     if (this.isNight || this.rainMaterial.opacity > 0) {
       const positions = this.rainGeometry.attributes.position.array;
       for (let i = 0; i < this.rainVelocities.length; i++) {
-        positions[i * 3 + 1] -= this.rainVelocities[i]; // drop y
-        positions[i * 3] -= 0.02; // slight wind on x
+        positions[i * 3 + 1] -= this.rainVelocities[i]; 
+        positions[i * 3] -= 0.02; 
 
-        if (positions[i * 3 + 1] < -2) { // Reset at bottom
+        if (positions[i * 3 + 1] < -2) { 
           positions[i * 3 + 1] = 10 + Math.random() * 5;
-          positions[i * 3] = (Math.random() - 0.5) * 25; // Reset X to prevent drift
+          positions[i * 3] = (Math.random() - 0.5) * 25; 
         }
       }
       this.rainGeometry.attributes.position.needsUpdate = true;

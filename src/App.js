@@ -15,6 +15,7 @@ export default class App {
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
     this.highestProgress = 0; 
+    this.wasCatHovered = false;
 
     this.initScene();
     this.initCamera();
@@ -51,6 +52,15 @@ export default class App {
       
       if (this.room) {
         this.room.toggleNightMode(this.isNightMode);
+      }
+      
+      // --- NEW: Trigger Rain audio to play/stop alongside the theme ---
+      if (this.audioManager) {
+        if (this.isNightMode) {
+          this.audioManager.playRain();
+        } else {
+          this.audioManager.stopRain();
+        }
       }
     });
   }
@@ -91,7 +101,6 @@ export default class App {
     const startExperience = () => {
       if (progressText) progressText.removeEventListener('click', startExperience);
       
-      // Since it's a direct button click now, audio will securely unlock on mobile!
       this.audioManager.playInitialRandom(); 
 
       const tl = gsap.timeline({
@@ -114,11 +123,10 @@ export default class App {
         }, "-=0.6"); 
     };
 
-    // FIX: Using explicit click on the button element instead of pointerdown on window
     if (progressText) {
       progressText.addEventListener('click', startExperience);
     } else {
-      window.addEventListener('click', startExperience); // Fallback
+      window.addEventListener('click', startExperience); 
     }
   }
 
@@ -233,7 +241,6 @@ export default class App {
 
     window.addEventListener('pointerdown', (event) => {
       this.pointerDownPosition.set(event.clientX, event.clientY);
-      // Immediately set mouse position so hover scales upon touch down
       this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
       this.mouse.y = -(event.clientY / this.size.height) * 2 + 1;
     });
@@ -241,7 +248,6 @@ export default class App {
     window.addEventListener('pointerup', (event) => {
       const distance = Math.hypot(event.clientX - this.pointerDownPosition.x, event.clientY - this.pointerDownPosition.y);
       
-      // On mobile, reset mouse so objects shrink back after the finger is lifted
       if (this.isMobile) {
         setTimeout(() => { this.mouse.set(-2, -2); }, 100);
       }
@@ -321,11 +327,11 @@ export default class App {
           }
         });
 
-        // FIX: Removed `if (!this.isMobile)` wrapper to allow raycaster scaling logic on mobile devices.
         this.raycaster.setFromCamera(this.mouse, this.camera);
         const intersects = this.raycaster.intersectObjects(interactiveObjects, false);
         
         let shouldShowPointer = false;
+        let isCatHoveredThisFrame = false; 
 
         if (intersects.length > 0 && !this.modalContainer.classList.contains('active')) {
           const hoveredObject = intersects[0].object;
@@ -338,9 +344,12 @@ export default class App {
                                   nameLower.includes('works') ||
                                   nameLower.includes('about') ||
                                   nameLower.includes('contact') ||
-                                  nameLower.includes('speaker'); 
+                                  nameLower.includes('speaker') ||
+                                  nameLower.includes('cat'); 
 
           if (isPointerObject) shouldShowPointer = true;
+
+          if (nameLower.includes('cat')) isCatHoveredThisFrame = true;
 
           const isRaycastObject = nameLower.includes('raycaster') || isPointerObject;
 
@@ -348,7 +357,13 @@ export default class App {
             hoveredObject.userData.targetScale.copy(hoveredObject.userData.originalScale).multiplyScalar(1.2);
           }
         }
+        
         document.body.style.cursor = shouldShowPointer ? 'pointer' : 'default';
+
+        if (isCatHoveredThisFrame && !this.wasCatHovered) {
+          this.audioManager.playMeow();
+        }
+        this.wasCatHovered = isCatHoveredThisFrame;
       }
     }
 

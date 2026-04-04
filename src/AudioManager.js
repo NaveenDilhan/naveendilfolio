@@ -1,10 +1,11 @@
-// src/AudioManager.js
+import gsap from 'gsap'; 
+
 export default class AudioManager {
   constructor() {
     this.tracks = [
-      { title: "Cozy Morning", artist: "Lofi Girl", src: "/audio/music/poor_happy.ogg" },
-      { title: "Midnight Walk", artist: "Chillhop", src: "/audio/music/blue_skies.ogg" },
-      { title: "Coffee Break", artist: "Jazz Vibes", src: "/audio/music/letting_go.ogg" }
+      { title: "Poor, But Happy", artist: "Holizna", src: "/audio/music/poor_happy.ogg" },
+      { title: "Blue Skies", artist: "Holizna", src: "/audio/music/blue_skies.ogg" },
+      { title: "Letting Go Of The Past", artist: "Holizna", src: "/audio/music/letting_go.ogg" }
     ];
     
     this.currentTrackIndex = Math.floor(Math.random() * this.tracks.length);
@@ -15,6 +16,15 @@ export default class AudioManager {
 
     this.clickSound = new Audio('/audio/sfx/click/bubble.ogg'); 
     this.clickSound.volume = 0.6;
+
+    this.meowSound = new Audio('/audio/sfx/meow.ogg'); 
+    this.meowSound.volume = 0.6;
+
+    // --- NEW: Rain Sound Setup ---
+    this.rainSound = new Audio('/audio/sfx/rain.ogg'); 
+    this.rainSound.loop = true; // Rain should loop indefinitely
+    this.rainSound.volume = 0; // Start at 0 so we can fade it in smoothly
+    this.targetRainVolume = 0.15; // Low volume so it mixes well with music
 
     this.isPlaying = false;
     this.hideTimeout = null;
@@ -53,12 +63,49 @@ export default class AudioManager {
   playClick() {
     if(!this.clickSound) return;
     
-    // Prevent the audio from attempting to play if the loading screen is still active.
     const loadingScreen = document.getElementById('loading-screen');
     if (loadingScreen && loadingScreen.style.display !== 'none') return;
     
     this.clickSound.currentTime = 0; 
     this.clickSound.play().catch(() => {}); 
+  }
+
+  playMeow() {
+    if(!this.meowSound) return;
+    
+    const loadingScreen = document.getElementById('loading-screen');
+    if (loadingScreen && loadingScreen.style.display !== 'none') return;
+    
+    this.meowSound.currentTime = 0; 
+    this.meowSound.play().catch(() => {}); 
+  }
+
+  // --- NEW: Fade In Rain ---
+  playRain() {
+    if(!this.rainSound) return;
+    this.rainSound.play().catch(() => {});
+    
+    // Smooth 2-second fade in (matches the visual night mode transition)
+    gsap.to(this.rainSound, { 
+      volume: this.targetRainVolume, 
+      duration: 2, 
+      ease: "power2.inOut" 
+    });
+  }
+
+  // --- NEW: Fade Out Rain ---
+  stopRain() {
+    if(!this.rainSound) return;
+    
+    // Smooth 2-second fade out, then pause the audio to save resources
+    gsap.to(this.rainSound, { 
+      volume: 0, 
+      duration: 2, 
+      ease: "power2.inOut",
+      onComplete: () => {
+        this.rainSound.pause();
+      }
+    });
   }
 
   initEventListeners() {
