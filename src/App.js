@@ -54,7 +54,6 @@ export default class App {
         this.room.toggleNightMode(this.isNightMode);
       }
       
-      // --- NEW: Trigger Rain audio to play/stop alongside the theme ---
       if (this.audioManager) {
         if (this.isNightMode) {
           this.audioManager.playRain();
@@ -192,6 +191,51 @@ export default class App {
       btn.addEventListener('click', () => this.closeModal());
     });
     this.modalOverlay.addEventListener('click', () => this.closeModal());
+
+    // --- NEW: WORKS NAVIGATION LOGIC ---
+    this.currentWorkIndex = 0;
+    this.workItems = document.querySelectorAll('.work-item');
+    this.workCounter = document.getElementById('work-counter');
+    const prevBtn = document.getElementById('prev-work');
+    const nextBtn = document.getElementById('next-work');
+
+    if (this.workItems.length > 0 && prevBtn && nextBtn && this.workCounter) {
+      
+      const updateWorksUI = () => {
+        // Toggle the 'active' class to show/hide projects
+        this.workItems.forEach((item, index) => {
+          if (index === this.currentWorkIndex) {
+            item.classList.add('active');
+          } else {
+            item.classList.remove('active');
+          }
+        });
+        
+        // Update counter text (e.g., "1 / 2")
+        this.workCounter.innerText = `${this.currentWorkIndex + 1} / ${this.workItems.length}`;
+        
+        // Disable buttons if at the very beginning or end
+        prevBtn.disabled = this.currentWorkIndex === 0;
+        nextBtn.disabled = this.currentWorkIndex === this.workItems.length - 1;
+      };
+
+      prevBtn.addEventListener('click', () => {
+        if (this.currentWorkIndex > 0) {
+          this.currentWorkIndex--;
+          updateWorksUI();
+        }
+      });
+
+      nextBtn.addEventListener('click', () => {
+        if (this.currentWorkIndex < this.workItems.length - 1) {
+          this.currentWorkIndex++;
+          updateWorksUI();
+        }
+      });
+
+      // Initialize the UI on first load
+      updateWorksUI();
+    }
   }
 
   openModal(type) {
