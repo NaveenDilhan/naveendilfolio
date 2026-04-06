@@ -116,7 +116,6 @@ export default class Room {
       blending: THREE.AdditiveBlending
     });
 
-    // OPTIMIZATION: Move rain logic to the GPU
     this.rainMaterial.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = { value: 0 };
       this.rainMaterial.userData.shader = shader;
@@ -198,7 +197,8 @@ export default class Room {
       dayTexture.minFilter = THREE.LinearFilter;
       this.loadedTextures.day[key] = dayTexture;
 
-      if (paths.night) {
+      // FIX: Only load the heavy night maps if NOT on mobile device
+      if (paths.night && !this.isMobile) {
         const nightTexture = textureLoader.load(paths.night);
         nightTexture.flipY = false;
         nightTexture.colorSpace = THREE.SRGBColorSpace;
@@ -230,7 +230,6 @@ export default class Room {
     const gltfLoader = new GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);
 
-    // OPTIMIZATION: Cache created materials to avoid instantiating duplicate MeshBasicMaterials
     const materialCache = {};
 
     gltfLoader.load("/models/Room_Portfolio_V5.glb", (glb) => {
@@ -285,7 +284,6 @@ export default class Room {
           if (matchedKey && !isCustomPicture) {
             if (child.material) child.material.dispose();
             
-            // Re-use materials from the cache instead of creating new ones
             if (!materialCache[matchedKey]) {
                 materialCache[matchedKey] = new THREE.MeshBasicMaterial({ 
                   map: this.loadedTextures.day[matchedKey],
@@ -328,6 +326,7 @@ export default class Room {
             this.swayMaterials.push(child.material);
           }
 
+          // If on mobile, this will correctly evaluate to undefined/false and skip the night shader
           let hasNightMap = matchedKey && this.loadedTextures.night[matchedKey];
           
           if (hasNightMap && !isCustomPicture) {
@@ -389,9 +388,14 @@ export default class Room {
 
           if (child.material) {
              if (!child.name.includes("Computer_Screen") && !child.material.name.includes("RGB_Fan") && !child.material.name.includes("Glass")) {
-                this.sceneMaterials.push(child.material);
+                // Optimization: Avoid pushing redundant cached materials
+                if (!this.sceneMaterials.includes(child.material)) {
+                    this.sceneMaterials.push(child.material);
+                }
              } else if (child.material.name.includes("Glass")) {
-                this.glassMaterials.push(child.material);
+                if (!this.glassMaterials.includes(child.material)) {
+                    this.glassMaterials.push(child.material);
+                }
              }
           }
 
@@ -412,7 +416,6 @@ export default class Room {
             this.pointerObjects.push(child);
           }
 
-          // OPTIMIZATION: Freeze matrices for non-moving objects
           const isDynamic = 
             child.name.includes("VGA_Fans") || 
             child.name.includes("chair_top") || 
@@ -437,13 +440,16 @@ export default class Room {
 
     this.sceneMaterials.forEach(mat => {
       if (mat.userData.mixRatio) {
+        // Desktop: Mix to the heavy night texture bake
         gsap.to(mat.userData.mixRatio, {
           value: isNight ? 1 : 0,
           duration: duration,
           ease: 'power2.inOut'
         });
       } else if (mat.color) {
-        const targetColor = isNight ? new THREE.Color(0x2b3044) : new THREE.Color(0xffffff);
+        // Mobile: Fake night mode using a cool dark grey-blue moonlight tint 
+        // 0x3a4556 gives a very convincing night feel when multiplied onto bright day bakes
+        const targetColor = isNight ? new THREE.Color(0x3a4556) : new THREE.Color(0xffffff);
         gsap.to(mat.color, {
           r: targetColor.r, g: targetColor.g, b: targetColor.b,
           duration: duration,
@@ -505,7 +511,6 @@ export default class Room {
        this.smokeMaterial.uniforms.uTime.value = elapsedTime;
     }
 
-    // OPTIMIZATION: Only pass elapsed time to shader, GPU handles the particle positions
     if (this.rainMaterial.userData.shader && this.rainMaterial.opacity > 0) {
         this.rainMaterial.userData.shader.uniforms.uTime.value = elapsedTime;
     }
