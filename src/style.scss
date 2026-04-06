@@ -1,20 +1,30 @@
 @use "./styles/fonts.scss";
 
-/* --- SOLUTION FOR MISSING NUMBERS --- */
+/* --- BULLETPROOF SOLUTION FOR MISSING NUMBERS --- */
 @font-face {
   font-family: "Number Fallback";
-  src: local("Arial Rounded MT Bold"), local("Comic Sans MS"), local("Nunito"), local("sans-serif");
-  unicode-range: U+0030-0039, U+0025, U+002E; /* 0-9, %, . */
+  src: local("system-ui"), local("-apple-system"), local("Roboto"), local("Segoe UI"), local("Arial"), local("sans-serif");
+  unicode-range: U+0030-0039, U+0025, U+002E, U+002F; /* 0-9, %, ., / */
 }
 
+/* Added "Number Fallback" to the front of BOTH font stacks */
 $font-content: "Number Fallback", "Shifty Notes", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-$font-title: "Motley Forces", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$font-title: "Number Fallback", "Motley Forces", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
 body {
   margin: 0;
   overflow: hidden;
   font-family: $font-content;
   background-color: #110e17; 
+  
+  /* OVERLAP FIX: Hide the day/night toggle button when modals are open on mobile */
+  &.modal-open {
+    #theme-toggle-btn {
+      opacity: 0 !important;
+      pointer-events: none !important;
+      transform: scale(0.8) !important;
+    }
+  }
 }
 
 #experience-canvas {

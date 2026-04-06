@@ -173,7 +173,8 @@ export default class App {
     });
     this.renderer.setSize(this.size.width, this.size.height);
     
-    const pixelRatioTarget = this.isMobile ? 1.5 : 2;
+    // STRICT mobile optimization: Mid-range phones struggle with >1 pixel ratio on heavy 3D scenes
+    const pixelRatioTarget = this.isMobile ? 1 : 2;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioTarget));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   }
@@ -192,7 +193,6 @@ export default class App {
     });
     this.modalOverlay.addEventListener('click', () => this.closeModal());
 
-    // --- NEW: WORKS NAVIGATION LOGIC ---
     this.currentWorkIndex = 0;
     this.workItems = document.querySelectorAll('.work-item');
     this.workCounter = document.getElementById('work-counter');
@@ -202,7 +202,6 @@ export default class App {
     if (this.workItems.length > 0 && prevBtn && nextBtn && this.workCounter) {
       
       const updateWorksUI = () => {
-        // Toggle the 'active' class to show/hide projects
         this.workItems.forEach((item, index) => {
           if (index === this.currentWorkIndex) {
             item.classList.add('active');
@@ -211,10 +210,8 @@ export default class App {
           }
         });
         
-        // Update counter text (e.g., "1 / 2")
         this.workCounter.innerText = `${this.currentWorkIndex + 1} / ${this.workItems.length}`;
         
-        // Disable buttons if at the very beginning or end
         prevBtn.disabled = this.currentWorkIndex === 0;
         nextBtn.disabled = this.currentWorkIndex === this.workItems.length - 1;
       };
@@ -233,13 +230,15 @@ export default class App {
         }
       });
 
-      // Initialize the UI on first load
       updateWorksUI();
     }
   }
 
   openModal(type) {
     if (this.controls) this.controls.enabled = false; 
+
+    // Hide theme toggle to prevent mobile UI overlap
+    document.body.classList.add('modal-open');
 
     Object.values(this.modals).forEach(m => m.classList.remove('active'));
     
@@ -260,6 +259,9 @@ export default class App {
 
   closeModal() {
     if (this.controls) this.controls.enabled = true; 
+
+    // Bring theme toggle back
+    document.body.classList.remove('modal-open');
 
     const activeModal = document.querySelector('.modal-content.active');
 
@@ -349,7 +351,7 @@ export default class App {
       }
 
       this.renderer.setSize(this.size.width, this.size.height);
-      const pixelRatioTarget = this.isMobile ? 1.5 : 2;
+      const pixelRatioTarget = this.isMobile ? 1 : 2;
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioTarget));
 
       this.camera.aspect = this.size.width / this.size.height;
@@ -362,8 +364,6 @@ render() {
     this.controls.update(); 
 
     if (this.room && this.room.interactiveObjects) {
-      
-      // Reset all GROUPS back to normal scale every frame
       if (this.room.interactiveGroups) {
         this.room.interactiveGroups.forEach(group => {
           if (group.userData.originalScale) {
@@ -381,7 +381,7 @@ render() {
 
         if (intersects.length > 0 && !this.modalContainer.classList.contains('active')) {
           const hoveredObject = intersects[0].object;
-          const interactiveGroup = hoveredObject.userData.interactiveGroup; // Get the parent!
+          const interactiveGroup = hoveredObject.userData.interactiveGroup; 
           
           const actionNameLower = hoveredObject.userData.actionName || hoveredObject.name.toLowerCase();
 
@@ -400,7 +400,6 @@ render() {
 
           const isRaycastObject = actionNameLower.includes('raycaster') || isPointerObject;
 
-          // Scale the PARENT GROUP, not the flat plane mesh
           if (isRaycastObject && interactiveGroup && interactiveGroup.userData.originalScale) {
             interactiveGroup.userData.targetScale.copy(interactiveGroup.userData.originalScale).multiplyScalar(1.2);
           }

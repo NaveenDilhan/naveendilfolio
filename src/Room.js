@@ -7,35 +7,22 @@ import gsap from 'gsap';
 const smokeVertexShader = `
 uniform float uTime;
 uniform sampler2D uPerlinTexture;
-
 varying vec2 vUv;
-
-vec2 rotate2D(vec2 value, float angle)
-{
-    float s = sin(angle);
-    float c = cos(angle);
-    mat2 m = mat2(c, s, -s, c);
-    return m * value;
+vec2 rotate2D(vec2 value, float angle) {
+    float s = sin(angle); float c = cos(angle);
+    mat2 m = mat2(c, s, -s, c); return m * value;
 }
-
-void main()
-{
+void main() {
     vec3 newPosition = position;
-
-    float twistPerlin = texture(
-        uPerlinTexture,
-        vec2(0.5, uv.y * 0.2 - uTime * 0.01)
-    ).r;
+    float twistPerlin = texture(uPerlinTexture, vec2(0.5, uv.y * 0.2 - uTime * 0.01)).r;
     float angle = twistPerlin * 3.0;
     newPosition.xz = rotate2D(newPosition.xz, angle);
-
     vec2 windOffset = vec2(
         texture(uPerlinTexture, vec2(0.25, uTime * 0.01)).r - 0.5,
         texture(uPerlinTexture, vec2(0.75, uTime * 0.01)).r - 0.5
     );
     windOffset *= pow(uv.y, 2.0) * 1.5;
     newPosition.xz += windOffset;
-
     gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
     vUv = uv;
 }
@@ -44,24 +31,16 @@ void main()
 const smokeFragmentShader = `
 uniform float uTime;
 uniform sampler2D uPerlinTexture;
-
 varying vec2 vUv;
-
-void main()
-{
+void main() {
     vec2 smokeUv = vUv;
-    smokeUv.x *= 0.5;
-    smokeUv.y *= 0.3;
-    smokeUv.y -= uTime * 0.04;
-
+    smokeUv.x *= 0.5; smokeUv.y *= 0.3; smokeUv.y -= uTime * 0.04;
     float smoke = texture(uPerlinTexture, smokeUv).r;
     smoke = smoothstep(0.4, 1.0, smoke);
-
     smoke *= smoothstep(0.0, 0.1, vUv.x);
     smoke *= smoothstep(1.0, 0.9, vUv.x);
     smoke *= smoothstep(0.0, 0.1, vUv.y);
     smoke *= smoothstep(1.0, 0.4, vUv.y);
-
     gl_FragColor = vec4(1, 1, 1, smoke);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -102,7 +81,7 @@ export default class Room {
 
     THREE.DefaultLoadingManager.onError = (url) => {
       console.error('⚠️ Missing File Detected. Could not load:', url);
-      if (this.onLoad) this.onLoad(); 
+      // Removed early this.onLoad() call here as it was causing crashes on mobile if a tiny asset failed
     };
 
     this.initVideo();
@@ -113,7 +92,8 @@ export default class Room {
   }
 
   initRain() {
-    const rainCount = 2000;
+    // Optimization: drastically reduce particle count for mobile
+    const rainCount = this.isMobile ? 300 : 2000;
     this.rainGeometry = new THREE.BufferGeometry();
     const rainPositions = new Float32Array(rainCount * 3);
     this.rainVelocities = [];
@@ -164,6 +144,11 @@ export default class Room {
 
     this.smokeMesh = new THREE.Mesh(smokeGeometry, this.smokeMaterial);
     this.smokeMesh.scale.set(0.15, 0.4, 0.15);
+    
+    // Optimization: Disable transparent smoke entirely on mobile
+    if (this.isMobile) {
+        this.smokeMesh.visible = false;
+    }
   }
 
   initVideo() {
@@ -187,14 +172,12 @@ export default class Room {
     const textureLoader = new THREE.TextureLoader(); 
     
     Object.entries(TEXTURE_MAP).forEach(([key, paths]) => {
-      // Load Day Texture
       const dayTexture = textureLoader.load(paths.day);
       dayTexture.flipY = false;
       dayTexture.colorSpace = THREE.SRGBColorSpace; 
       dayTexture.minFilter = THREE.LinearFilter;
       this.loadedTextures.day[key] = dayTexture;
 
-      // Load Night Texture (if available in config)
       if (paths.night) {
         const nightTexture = textureLoader.load(paths.night);
         nightTexture.flipY = false;
@@ -239,7 +222,6 @@ export default class Room {
           let isInteractive = false;
           let actionTargetName = child.name.toLowerCase();
 
-          // Search hierarchy for an interactive name
           while (currentParent) {
             const parentNameLower = currentParent.name.toLowerCase();
             if (parentNameLower.includes("raycaster") || parentNameLower.includes("pointer") || parentNameLower.includes("github") || parentNameLower.includes("linkedin") || parentNameLower.includes("instagram") || parentNameLower.includes("works") || parentNameLower.includes("about") || parentNameLower.includes("contact") || parentNameLower.includes("cat")) {
@@ -251,7 +233,6 @@ export default class Room {
             currentParent = currentParent.parent;
           }
 
-          // 1. Apply Base Materials & Textures
           const matchedKey = Object.keys(this.loadedTextures.day).find((key) => child.name.includes(key));
           if (matchedKey) {
             if (child.material) child.material.dispose();
@@ -261,13 +242,11 @@ export default class Room {
             });
           }
           
-          // 2. Handle Glass
           if (child.material && child.material.name.includes("Glass")) {
+            // Optimization: Mobile handles MeshBasicMaterial extremely well, Standard/Physical can crash mid-range phones.
             if (this.isMobile) {
-              child.material = new THREE.MeshStandardMaterial({
-                color: 0xfbfbfb, transparent: true, opacity: 0.25,
-                roughness: 0.1, metalness: 0.8,
-                envMap: this.environmentMap, envMapIntensity: 1.5,
+              child.material = new THREE.MeshBasicMaterial({
+                color: 0xfbfbfb, transparent: true, opacity: 0.2,
                 depthWrite: false
               });
             } else {
@@ -280,19 +259,16 @@ export default class Room {
             }
           }
 
-          // 3. Handle Screen
           if (child.name.includes("Computer_Screen")) {
             if (child.material) child.material.dispose();
             child.material = new THREE.MeshBasicMaterial({ map: this.videoTexture });
           }
 
-          // 4. Handle RGB Fan
           if (child.material && child.material.name.includes("RGB_Fan")) {
             if (child.material) child.material.dispose(); 
             child.material = this.sharedRgbMaterial; 
           }
 
-          // 5. Setup Plant Clone (Must clone before applying shaders)
           let isPlant = child.name.includes("Med_Plant");
           if (isPlant && child.material) {
             child.material = child.material.clone();
@@ -300,7 +276,6 @@ export default class Room {
             this.swayMaterials.push(child.material);
           }
 
-          // 6. Setup Custom Shaders 
           let hasNightMap = matchedKey && this.loadedTextures.night[matchedKey];
           
           if (hasNightMap) {
@@ -308,16 +283,11 @@ export default class Room {
           }
 
           if (hasNightMap || isPlant) {
-            
-            // FIX: Force Three.js to compile separate shader programs!
-            // If we don't do this, it lumps the swaying plant together with non-swaying meshes.
             child.material.customProgramCacheKey = () => {
                 return (hasNightMap ? 'nightMap_' : '') + (isPlant ? 'sway_' : '');
             };
 
             child.material.onBeforeCompile = (shader) => {
-              
-              // Apply Fragment Shader Modification for Night Maps
               if (hasNightMap) {
                 shader.uniforms.tNight = { value: this.loadedTextures.night[matchedKey] };
                 shader.uniforms.uMixRatio = child.material.userData.mixRatio;
@@ -340,7 +310,6 @@ export default class Room {
                 );
               }
 
-              // Apply Vertex Shader Modification for Swaying Plants
               if (isPlant) {
                 shader.uniforms.uTime = child.material.userData.shaderUniforms.uTime;
                 
@@ -366,7 +335,6 @@ export default class Room {
             };
           }
 
-          // 7. Store materials for toggling
           if (child.material) {
              if (!child.name.includes("Computer_Screen") && !child.material.name.includes("RGB_Fan") && !child.material.name.includes("Glass")) {
                 this.sceneMaterials.push(child.material);
@@ -375,7 +343,6 @@ export default class Room {
              }
           }
 
-          // 8. Apply interactive properties and DoubleSide
           if (isInteractive) {
             if (!interactiveGroup.userData.originalScale) {
                 interactiveGroup.userData.originalScale = interactiveGroup.scale.clone();
@@ -404,9 +371,7 @@ export default class Room {
     this.isNight = isNight;
     const duration = 2; 
 
-    // Animate custom crossfade values instead of the fake tint
     this.sceneMaterials.forEach(mat => {
-      // Seamless texture crossfade
       if (mat.userData.mixRatio) {
         gsap.to(mat.userData.mixRatio, {
           value: isNight ? 1 : 0,
@@ -414,7 +379,6 @@ export default class Room {
           ease: 'power2.inOut'
         });
       } else if (mat.color) {
-        // Fallback for any meshes that don't have textures baked 
         const targetColor = isNight ? new THREE.Color(0x2b3044) : new THREE.Color(0xffffff);
         gsap.to(mat.color, {
           r: targetColor.r, g: targetColor.g, b: targetColor.b,
@@ -438,7 +402,7 @@ export default class Room {
       ease: 'power2.inOut'
     });
 
-    if (this.smokeMaterial) {
+    if (this.smokeMaterial && !this.isMobile) {
        gsap.to(this.smokeMaterial, {
          opacity: isNight ? 0.4 : 1.0,
          duration: duration,
@@ -461,7 +425,6 @@ export default class Room {
     const hue = (elapsedTime * 0.3) % 1; 
     this.sharedRgbMaterial.color.setHSL(hue, 1, 0.5).multiplyScalar(2.5); 
 
-    // Scale the Parent Groups
     if (this.interactiveGroups) {
       this.interactiveGroups.forEach(group => {
         if (group.userData.targetScale) group.scale.lerp(group.userData.targetScale, 0.15); 
@@ -474,7 +437,7 @@ export default class Room {
       }
     });
 
-    if (this.smokeMaterial && this.smokeMaterial.uniforms) {
+    if (this.smokeMaterial && this.smokeMaterial.uniforms && !this.isMobile) {
        this.smokeMaterial.uniforms.uTime.value = elapsedTime;
     }
 
