@@ -173,7 +173,6 @@ export default class App {
     });
     this.renderer.setSize(this.size.width, this.size.height);
     
-    // STRICT mobile optimization: Mid-range phones struggle with >1 pixel ratio on heavy 3D scenes
     const pixelRatioTarget = this.isMobile ? 1 : 2;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioTarget));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -237,7 +236,6 @@ export default class App {
   openModal(type) {
     if (this.controls) this.controls.enabled = false; 
 
-    // Hide theme toggle to prevent mobile UI overlap
     document.body.classList.add('modal-open');
 
     Object.values(this.modals).forEach(m => m.classList.remove('active'));
@@ -260,7 +258,6 @@ export default class App {
   closeModal() {
     if (this.controls) this.controls.enabled = true; 
 
-    // Bring theme toggle back
     document.body.classList.remove('modal-open');
 
     const activeModal = document.querySelector('.modal-content.active');
@@ -313,23 +310,24 @@ export default class App {
 
       if (intersects.length > 0) {
         const clickedObject = intersects[0].object;
-        const nameLower = clickedObject.name.toLowerCase();
+        // Prioritize actionName to smoothly catch the re-mapped "about" logic from custom pictures
+        const actionNameLower = clickedObject.userData.actionName || clickedObject.name.toLowerCase();
 
-        if (nameLower.includes('speaker')) {
+        if (actionNameLower.includes('speaker')) {
            this.audioManager.togglePlayerUI();
         }
 
-        if (nameLower.includes('github')) {
+        if (actionNameLower.includes('github')) {
           window.open('https://github.com/naveendilhan', '_blank');
-        } else if (nameLower.includes('linkedin')) {
+        } else if (actionNameLower.includes('linkedin')) {
           window.open('https://www.linkedin.com/in/naveen-wickramasinghe/', '_blank');
-        } else if (nameLower.includes('instagram')) {
+        } else if (actionNameLower.includes('instagram')) {
           window.open('https://www.instagram.com/nauuveeyn/', '_blank');
         } 
         
-        if (nameLower.includes('works')) this.openModal('works');
-        else if (nameLower.includes('about')) this.openModal('about');
-        else if (nameLower.includes('contact')) this.openModal('contact');
+        if (actionNameLower.includes('works')) this.openModal('works');
+        else if (actionNameLower.includes('about')) this.openModal('about');
+        else if (actionNameLower.includes('contact')) this.openModal('contact');
       }
     });
 

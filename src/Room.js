@@ -67,6 +67,7 @@ export default class Room {
     
     this.sharedRgbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
     this.loadedTextures = { day: {}, night: {} }; 
+    this.pictureTextures = []; // Store custom picture textures
     
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
@@ -81,7 +82,6 @@ export default class Room {
 
     THREE.DefaultLoadingManager.onError = (url) => {
       console.error('⚠️ Missing File Detected. Could not load:', url);
-      // Removed early this.onLoad() call here as it was causing crashes on mobile if a tiny asset failed
     };
 
     this.initVideo();
@@ -92,7 +92,6 @@ export default class Room {
   }
 
   initRain() {
-    // Optimization: drastically reduce particle count for mobile
     const rainCount = this.isMobile ? 300 : 2000;
     this.rainGeometry = new THREE.BufferGeometry();
     const rainPositions = new Float32Array(rainCount * 3);
@@ -145,7 +144,6 @@ export default class Room {
     this.smokeMesh = new THREE.Mesh(smokeGeometry, this.smokeMaterial);
     this.smokeMesh.scale.set(0.15, 0.4, 0.15);
     
-    // Optimization: Disable transparent smoke entirely on mobile
     if (this.isMobile) {
         this.smokeMesh.visible = false;
     }
@@ -187,6 +185,18 @@ export default class Room {
       }
     });
 
+    // Load custom pictures for frames
+    this.pictureTextures = [
+        textureLoader.load('/images/personal/1.webp'),
+        textureLoader.load('/images/personal/2.webp'),
+        textureLoader.load('/images/personal/3.webp')
+    ];
+    this.pictureTextures.forEach(tex => {
+        tex.flipY = false;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.minFilter = THREE.LinearFilter;
+    });
+
     this.environmentMap = new THREE.CubeTextureLoader()
       .setPath('/textures/skybox/')
       .load(['px.webp', 'nx.webp', 'py.webp', 'ny.webp', 'pz.webp', 'nz.webp']);
@@ -200,6 +210,8 @@ export default class Room {
     gltfLoader.setDRACOLoader(dracoLoader);
 
     gltfLoader.load("/models/Room_Portfolio_V5.glb", (glb) => {
+      let pictureIndex = 0; // Track which picture we apply to materials
+
       glb.scene.traverse((child) => {
         
         if (child.name.toLowerCase().includes("cup")) {
@@ -224,17 +236,32 @@ export default class Room {
 
           while (currentParent) {
             const parentNameLower = currentParent.name.toLowerCase();
-            if (parentNameLower.includes("raycaster") || parentNameLower.includes("pointer") || parentNameLower.includes("github") || parentNameLower.includes("linkedin") || parentNameLower.includes("instagram") || parentNameLower.includes("works") || parentNameLower.includes("about") || parentNameLower.includes("contact") || parentNameLower.includes("cat")) {
+            // Added "picture" to trigger interaction
+            if (parentNameLower.includes("raycaster") || parentNameLower.includes("pointer") || parentNameLower.includes("github") || parentNameLower.includes("linkedin") || parentNameLower.includes("instagram") || parentNameLower.includes("works") || parentNameLower.includes("about") || parentNameLower.includes("contact") || parentNameLower.includes("cat") || parentNameLower.includes("picture")) {
                 isInteractive = true;
-                actionTargetName = parentNameLower; 
+                // If the object name has picture, redirect the action to about
+                actionTargetName = parentNameLower.includes("picture") ? "about" : parentNameLower; 
                 interactiveGroup = currentParent; 
                 break;
             }
             currentParent = currentParent.parent;
           }
 
+          let isCustomPicture = false;
+
+          // Replace picture frame materials sequentially
+          if (child.material && child.material.name.toLowerCase().includes("picture")) {
+             if (child.material) child.material.dispose();
+             child.material = new THREE.MeshBasicMaterial({
+                 map: this.pictureTextures[pictureIndex % this.pictureTextures.length],
+                 color: 0xffffff
+             });
+             pictureIndex++;
+             isCustomPicture = true;
+          }
+
           const matchedKey = Object.keys(this.loadedTextures.day).find((key) => child.name.includes(key));
-          if (matchedKey) {
+          if (matchedKey && !isCustomPicture) {
             if (child.material) child.material.dispose();
             child.material = new THREE.MeshBasicMaterial({ 
               map: this.loadedTextures.day[matchedKey],
@@ -243,7 +270,6 @@ export default class Room {
           }
           
           if (child.material && child.material.name.includes("Glass")) {
-            // Optimization: Mobile handles MeshBasicMaterial extremely well, Standard/Physical can crash mid-range phones.
             if (this.isMobile) {
               child.material = new THREE.MeshBasicMaterial({
                 color: 0xfbfbfb, transparent: true, opacity: 0.2,
@@ -278,7 +304,7 @@ export default class Room {
 
           let hasNightMap = matchedKey && this.loadedTextures.night[matchedKey];
           
-          if (hasNightMap) {
+          if (hasNightMap && !isCustomPicture) {
             child.material.userData.mixRatio = { value: 0 };
           }
 
