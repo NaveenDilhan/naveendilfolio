@@ -75,13 +75,19 @@ export default class App {
   }
 
   handleLoadComplete() {
+    // FIX 1: Pre-compile shaders so the GPU doesn't stutter on the very first frame of the animation
+    this.renderer.compile(this.scene, this.camera);
+
     const finalCameraPos = this.camera.position.clone();
 
+    // Set initial zoomed-in camera position
     this.camera.position.set(
       finalCameraPos.x * 0.2, 
       finalCameraPos.y * 0.3 + 1, 
       finalCameraPos.z * 0.2
     );
+    // Ensure the camera points at the target right from the start
+    this.camera.lookAt(this.controls.target);
 
     if (this.controls) this.controls.enabled = false;
 
@@ -102,24 +108,32 @@ export default class App {
       
       this.audioManager.playInitialRandom(); 
 
-      const tl = gsap.timeline({
-        onComplete: () => {
-          if (this.controls) this.controls.enabled = true;
-          gsap.to('#theme-toggle-btn', { opacity: 1, scale: 1, duration: 0.5, pointerEvents: 'auto' });
-        }
+      // FIX 2: Defer animation start to the next frame to clear DOM updates cleanly
+      requestAnimationFrame(() => {
+        const tl = gsap.timeline({
+          onComplete: () => {
+            // Re-enable controls only AFTER the camera finishes its GSAP journey
+            if (this.controls) this.controls.enabled = true;
+            gsap.to('#theme-toggle-btn', { opacity: 1, scale: 1, duration: 0.5, pointerEvents: 'auto' });
+          }
+        });
+        
+        tl.to('.loader-content', { opacity: 0, scale: 0.9, duration: 0.5, ease: 'power2.in' }) 
+          .to('#loading-screen', { opacity: 0, duration: 0.8, ease: 'power2.inOut', onComplete: () => {
+             document.getElementById('loading-screen').style.display = 'none'; 
+          }})
+          .to(this.camera.position, { 
+            x: finalCameraPos.x, 
+            y: finalCameraPos.y, 
+            z: finalCameraPos.z,
+            duration: 3.5, 
+            ease: 'power3.inOut',
+            onUpdate: () => {
+               // FIX 3: Keep the camera perfectly focused on the center target during the tween
+               this.camera.lookAt(this.controls.target);
+            }
+          }, "-=0.6"); 
       });
-      
-      tl.to('.loader-content', { opacity: 0, scale: 0.9, duration: 0.5, ease: 'power2.in' }) 
-        .to('#loading-screen', { opacity: 0, duration: 0.8, ease: 'power2.inOut', onComplete: () => {
-           document.getElementById('loading-screen').style.display = 'none'; 
-        }})
-        .to(this.camera.position, { 
-          x: finalCameraPos.x, 
-          y: finalCameraPos.y, 
-          z: finalCameraPos.z,
-          duration: 3.5, 
-          ease: 'power3.inOut' 
-        }, "-=0.6"); 
     };
 
     if (progressText) {
@@ -310,7 +324,6 @@ export default class App {
 
       if (intersects.length > 0) {
         const clickedObject = intersects[0].object;
-        // Prioritize actionName to smoothly catch the re-mapped "about" logic from custom pictures
         const actionNameLower = clickedObject.userData.actionName || clickedObject.name.toLowerCase();
 
         if (actionNameLower.includes('speaker')) {
@@ -357,9 +370,14 @@ export default class App {
     });
   }
 
-render() {
+  render() {
     const elapsedTime = this.clock.getElapsedTime();
-    this.controls.update(); 
+
+    // FIX 4: Only update OrbitControls if they are enabled.
+    // This stops OrbitControls from applying damping math while GSAP is manually animating the camera!
+    if (this.controls && this.controls.enabled) {
+        this.controls.update(); 
+    }
 
     if (this.room && this.room.interactiveObjects) {
       if (this.room.interactiveGroups) {
