@@ -73,6 +73,7 @@ body {
 
   .modal-content {
     position: relative; 
+    box-sizing: border-box; /* Forces padding/borders to stay inside the max-height limit */
     
     /* Color Palette */
     --color-bg-solid: #f0fafd; 
@@ -98,7 +99,7 @@ body {
     
     overflow-y: auto; 
     overflow-x: hidden;
-    max-height: 85vh;
+    max-height: 90vh; /* Adjusted from 85vh to balance out the box-sizing change */
 
     /* --- SCROLLBAR OVERFLOW FIX FOR MODAL CONTENT --- */
     &::-webkit-scrollbar {
@@ -128,6 +129,12 @@ body {
     padding: 48px 40px;
     max-width: 700px;
     width: 85%;
+    
+    /* Automatically shrink padding on shorter screens so content isn't cramped */
+    @media (max-height: 800px) {
+      padding: 30px 20px;
+      max-height: 95vh;
+    }
     
     color: var(--color-text); 
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
