@@ -12,11 +12,11 @@ export const CAMERA_VIEWS = {
 };
 
 export const TEXTURE_MAP = {
-  First:  { day: "/textures/room/FirstImageTexture.webp" },
-  Second: { day: "/textures/room/SecondImageTexture.webp" },
-  Third:  { day: "/textures/room/ThirdImageTexture.webp" },
-  Fourth: { day: "/textures/room/FourthImageTexture.webp" },
-  Fifth:  { day: "/textures/room/FifthImageTexture.webp" },
-  Sixth:  { day: "/textures/room/SixthImageTexture.webp" },
-  Seventh:{ day: "/textures/room/SeventhImageTexture.webp" },
+  First:  { day: "/textures/room/FirstImageTexture.webp", night: "/textures/room/FirstImageTextureNight.webp" },
+  Second: { day: "/textures/room/SecondImageTexture.webp", night: "/textures/room/SecondImageTextureNight.webp" },
+  Third:  { day: "/textures/room/ThirdImageTexture.webp", night: "/textures/room/ThirdImageTextureNight.webp" },
+  Fourth: { day: "/textures/room/FourthImageTexture.webp", night: "/textures/room/FourthImageTextureNight.webp" },
+  Fifth:  { day: "/textures/room/FifthImageTexture.webp", night: "/textures/room/FifthImageTextureNight.webp" },
+  Sixth:  { day: "/textures/room/SixthImageTexture.webp", night: "/textures/room/SixthImageTextureNight.webp" },
+  Seventh:{ day: "/textures/room/SeventhImageTexture.webp", night: "/textures/room/SeventhImageTextureNight.webp" },
 };

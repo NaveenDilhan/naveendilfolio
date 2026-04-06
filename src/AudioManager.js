@@ -24,7 +24,7 @@ export default class AudioManager {
     this.rainSound = new Audio('/audio/sfx/rain.ogg'); 
     this.rainSound.loop = true; // Rain should loop indefinitely
     this.rainSound.volume = 0; // Start at 0 so we can fade it in smoothly
-    this.targetRainVolume = 0.15; // Low volume so it mixes well with music
+    this.targetRainVolume = 1; // Low volume so it mixes well with music
 
     this.isPlaying = false;
     this.hideTimeout = null;

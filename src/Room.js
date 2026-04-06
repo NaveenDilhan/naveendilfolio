@@ -78,7 +78,7 @@ export default class Room {
     this.raycastObjects = []; 
     this.pointerObjects = []; 
     this.interactiveObjects = []; 
-    this.interactiveGroups = []; // Tracks parent groups for scaling
+    this.interactiveGroups = []; 
     this.chairTop = null; 
     
     this.sceneMaterials = []; 
@@ -87,7 +87,7 @@ export default class Room {
     this.isNight = false;
     
     this.sharedRgbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
-    this.loadedTextures = { day: {} };
+    this.loadedTextures = { day: {}, night: {} }; 
     
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
@@ -187,10 +187,21 @@ export default class Room {
     const textureLoader = new THREE.TextureLoader(); 
     
     Object.entries(TEXTURE_MAP).forEach(([key, paths]) => {
+      // Load Day Texture
       const dayTexture = textureLoader.load(paths.day);
       dayTexture.flipY = false;
       dayTexture.colorSpace = THREE.SRGBColorSpace; 
+      dayTexture.minFilter = THREE.LinearFilter;
       this.loadedTextures.day[key] = dayTexture;
+
+      // Load Night Texture (if available in config)
+      if (paths.night) {
+        const nightTexture = textureLoader.load(paths.night);
+        nightTexture.flipY = false;
+        nightTexture.colorSpace = THREE.SRGBColorSpace;
+        nightTexture.minFilter = THREE.LinearFilter; 
+        this.loadedTextures.night[key] = nightTexture;
+      }
     });
 
     this.environmentMap = new THREE.CubeTextureLoader()
@@ -240,7 +251,7 @@ export default class Room {
             currentParent = currentParent.parent;
           }
 
-          // Apply Materials
+          // 1. Apply Base Materials & Textures
           const matchedKey = Object.keys(this.loadedTextures.day).find((key) => child.name.includes(key));
           if (matchedKey) {
             if (child.material) child.material.dispose();
@@ -248,11 +259,9 @@ export default class Room {
               map: this.loadedTextures.day[matchedKey],
               color: 0xffffff 
             });
-            if (child.material.map) {
-              child.material.map.minFilter = THREE.LinearFilter;
-            }
           }
           
+          // 2. Handle Glass
           if (child.material && child.material.name.includes("Glass")) {
             if (this.isMobile) {
               child.material = new THREE.MeshStandardMaterial({
@@ -271,46 +280,93 @@ export default class Room {
             }
           }
 
+          // 3. Handle Screen
           if (child.name.includes("Computer_Screen")) {
             if (child.material) child.material.dispose();
             child.material = new THREE.MeshBasicMaterial({ map: this.videoTexture });
           }
 
+          // 4. Handle RGB Fan
           if (child.material && child.material.name.includes("RGB_Fan")) {
             if (child.material) child.material.dispose(); 
             child.material = this.sharedRgbMaterial; 
           }
 
-          if (child.name.includes("Med_Plant") && child.material) {
+          // 5. Setup Plant Clone (Must clone before applying shaders)
+          let isPlant = child.name.includes("Med_Plant");
+          if (isPlant && child.material) {
             child.material = child.material.clone();
             child.material.userData.shaderUniforms = { uTime: { value: 0 } };
-
-            child.material.onBeforeCompile = (shader) => {
-              shader.uniforms.uTime = child.material.userData.shaderUniforms.uTime;
-              
-              shader.vertexShader = `
-                uniform float uTime;
-                ${shader.vertexShader}
-              `;
-              
-              shader.vertexShader = shader.vertexShader.replace(
-                '#include <begin_vertex>',
-                `
-                #include <begin_vertex>
-                
-                float heightFactor = max(0.0, position.y - 0.1); 
-                float windX = sin(uTime * 1.5 + position.x) * 0.03 * heightFactor;
-                float windZ = cos(uTime * 1.2 + position.z) * 0.03 * heightFactor;
-                
-                transformed.x += windX;
-                transformed.z += windZ;
-                `
-              );
-            };
-            
             this.swayMaterials.push(child.material);
           }
 
+          // 6. Setup Custom Shaders 
+          let hasNightMap = matchedKey && this.loadedTextures.night[matchedKey];
+          
+          if (hasNightMap) {
+            child.material.userData.mixRatio = { value: 0 };
+          }
+
+          if (hasNightMap || isPlant) {
+            
+            // FIX: Force Three.js to compile separate shader programs!
+            // If we don't do this, it lumps the swaying plant together with non-swaying meshes.
+            child.material.customProgramCacheKey = () => {
+                return (hasNightMap ? 'nightMap_' : '') + (isPlant ? 'sway_' : '');
+            };
+
+            child.material.onBeforeCompile = (shader) => {
+              
+              // Apply Fragment Shader Modification for Night Maps
+              if (hasNightMap) {
+                shader.uniforms.tNight = { value: this.loadedTextures.night[matchedKey] };
+                shader.uniforms.uMixRatio = child.material.userData.mixRatio;
+
+                shader.fragmentShader = `
+                    uniform sampler2D tNight;
+                    uniform float uMixRatio;
+                    ${shader.fragmentShader}
+                `;
+
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <map_fragment>',
+                    `
+                    #ifdef USE_MAP
+                        vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+                        vec4 nightColor = texture2D( tNight, vMapUv );
+                        diffuseColor *= mix(sampledDiffuseColor, nightColor, uMixRatio);
+                    #endif
+                    `
+                );
+              }
+
+              // Apply Vertex Shader Modification for Swaying Plants
+              if (isPlant) {
+                shader.uniforms.uTime = child.material.userData.shaderUniforms.uTime;
+                
+                shader.vertexShader = `
+                  uniform float uTime;
+                  ${shader.vertexShader}
+                `;
+                
+                shader.vertexShader = shader.vertexShader.replace(
+                  '#include <begin_vertex>',
+                  `
+                  #include <begin_vertex>
+                  
+                  float heightFactor = max(0.0, position.y - 0.1); 
+                  float windX = sin(uTime * 1.5 + position.x) * 0.03 * heightFactor;
+                  float windZ = cos(uTime * 1.2 + position.z) * 0.03 * heightFactor;
+                  
+                  transformed.x += windX;
+                  transformed.z += windZ;
+                  `
+                );
+              }
+            };
+          }
+
+          // 7. Store materials for toggling
           if (child.material) {
              if (!child.name.includes("Computer_Screen") && !child.material.name.includes("RGB_Fan") && !child.material.name.includes("Glass")) {
                 this.sceneMaterials.push(child.material);
@@ -319,7 +375,7 @@ export default class Room {
              }
           }
 
-          // Apply interactive properties and DoubleSide
+          // 8. Apply interactive properties and DoubleSide
           if (isInteractive) {
             if (!interactiveGroup.userData.originalScale) {
                 interactiveGroup.userData.originalScale = interactiveGroup.scale.clone();
@@ -346,12 +402,20 @@ export default class Room {
 
   toggleNightMode(isNight) {
     this.isNight = isNight;
-    
-    const targetColor = isNight ? new THREE.Color(0x2b3044) : new THREE.Color(0xffffff);
     const duration = 2; 
 
+    // Animate custom crossfade values instead of the fake tint
     this.sceneMaterials.forEach(mat => {
-      if (mat.color) {
+      // Seamless texture crossfade
+      if (mat.userData.mixRatio) {
+        gsap.to(mat.userData.mixRatio, {
+          value: isNight ? 1 : 0,
+          duration: duration,
+          ease: 'power2.inOut'
+        });
+      } else if (mat.color) {
+        // Fallback for any meshes that don't have textures baked 
+        const targetColor = isNight ? new THREE.Color(0x2b3044) : new THREE.Color(0xffffff);
         gsap.to(mat.color, {
           r: targetColor.r, g: targetColor.g, b: targetColor.b,
           duration: duration,
