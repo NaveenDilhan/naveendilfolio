@@ -67,7 +67,7 @@ export default class Room {
     
     this.sharedRgbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
     this.loadedTextures = { day: {}, night: {} }; 
-    this.pictureTextures = []; // Store custom picture textures
+    this.pictureTextures = [];
     
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
@@ -95,16 +95,17 @@ export default class Room {
     const rainCount = this.isMobile ? 300 : 2000;
     this.rainGeometry = new THREE.BufferGeometry();
     const rainPositions = new Float32Array(rainCount * 3);
-    this.rainVelocities = [];
+    const rainSpeeds = new Float32Array(rainCount);
 
     for (let i = 0; i < rainCount; i++) {
-      rainPositions[i * 3] = (Math.random() - 0.5) * 25; 
-      rainPositions[i * 3 + 1] = Math.random() * 20;     
-      rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 25; 
-      this.rainVelocities.push(0.15 + Math.random() * 0.1);  
+      rainPositions[i * 3] = (Math.random() - 0.5) * 25; // X
+      rainPositions[i * 3 + 1] = Math.random() * 20;     // Y
+      rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 25; // Z
+      rainSpeeds[i] = 0.15 + Math.random() * 0.1;        // Local speed
     }
 
     this.rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+    this.rainGeometry.setAttribute('aSpeed', new THREE.BufferAttribute(rainSpeeds, 1));
 
     this.rainMaterial = new THREE.PointsMaterial({
       color: 0xaaccff,
@@ -114,6 +115,27 @@ export default class Room {
       depthWrite: false,
       blending: THREE.AdditiveBlending
     });
+
+    // OPTIMIZATION: Move rain logic to the GPU
+    this.rainMaterial.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = { value: 0 };
+      this.rainMaterial.userData.shader = shader;
+      shader.vertexShader = `
+        uniform float uTime;
+        attribute float aSpeed;
+        ${shader.vertexShader}
+      `.replace(
+        `#include <begin_vertex>`,
+        `
+        #include <begin_vertex>
+        // Calculate drop mathematically based on time, wrapping around 15 units
+        float yOffset = mod(position.y - (uTime * aSpeed * 60.0), 15.0);
+        transformed.y = yOffset - 2.0; 
+        // Calculate wind drift
+        transformed.x = mod(position.x - (uTime * 2.0) + 12.5, 25.0) - 12.5;
+        `
+      );
+    };
 
     this.rainSystem = new THREE.Points(this.rainGeometry, this.rainMaterial);
     this.scene.add(this.rainSystem);
@@ -185,7 +207,6 @@ export default class Room {
       }
     });
 
-    // Load custom pictures for frames
     this.pictureTextures = [
         textureLoader.load('/images/personal/1.webp'),
         textureLoader.load('/images/personal/2.webp'),
@@ -209,8 +230,11 @@ export default class Room {
     const gltfLoader = new GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);
 
+    // OPTIMIZATION: Cache created materials to avoid instantiating duplicate MeshBasicMaterials
+    const materialCache = {};
+
     gltfLoader.load("/models/Room_Portfolio_V5.glb", (glb) => {
-      let pictureIndex = 0; // Track which picture we apply to materials
+      let pictureIndex = 0;
 
       glb.scene.traverse((child) => {
         
@@ -236,10 +260,8 @@ export default class Room {
 
           while (currentParent) {
             const parentNameLower = currentParent.name.toLowerCase();
-            // Added "picture" to trigger interaction
             if (parentNameLower.includes("raycaster") || parentNameLower.includes("pointer") || parentNameLower.includes("github") || parentNameLower.includes("linkedin") || parentNameLower.includes("instagram") || parentNameLower.includes("works") || parentNameLower.includes("about") || parentNameLower.includes("contact") || parentNameLower.includes("cat") || parentNameLower.includes("picture")) {
                 isInteractive = true;
-                // If the object name has picture, redirect the action to about
                 actionTargetName = parentNameLower.includes("picture") ? "about" : parentNameLower; 
                 interactiveGroup = currentParent; 
                 break;
@@ -249,7 +271,6 @@ export default class Room {
 
           let isCustomPicture = false;
 
-          // Replace picture frame materials sequentially
           if (child.material && child.material.name.toLowerCase().includes("picture")) {
              if (child.material) child.material.dispose();
              child.material = new THREE.MeshBasicMaterial({
@@ -263,10 +284,15 @@ export default class Room {
           const matchedKey = Object.keys(this.loadedTextures.day).find((key) => child.name.includes(key));
           if (matchedKey && !isCustomPicture) {
             if (child.material) child.material.dispose();
-            child.material = new THREE.MeshBasicMaterial({ 
-              map: this.loadedTextures.day[matchedKey],
-              color: 0xffffff 
-            });
+            
+            // Re-use materials from the cache instead of creating new ones
+            if (!materialCache[matchedKey]) {
+                materialCache[matchedKey] = new THREE.MeshBasicMaterial({ 
+                  map: this.loadedTextures.day[matchedKey],
+                  color: 0xffffff 
+                });
+            }
+            child.material = materialCache[matchedKey];
           }
           
           if (child.material && child.material.name.includes("Glass")) {
@@ -385,6 +411,18 @@ export default class Room {
             this.raycastObjects.push(child);
             this.pointerObjects.push(child);
           }
+
+          // OPTIMIZATION: Freeze matrices for non-moving objects
+          const isDynamic = 
+            child.name.includes("VGA_Fans") || 
+            child.name.includes("chair_top") || 
+            isPlant || 
+            isInteractive; 
+
+          if (!isDynamic) {
+              child.updateMatrix();
+              child.matrixAutoUpdate = false; 
+          }
         }
       });
       
@@ -467,18 +505,9 @@ export default class Room {
        this.smokeMaterial.uniforms.uTime.value = elapsedTime;
     }
 
-    if (this.isNight || this.rainMaterial.opacity > 0) {
-      const positions = this.rainGeometry.attributes.position.array;
-      for (let i = 0; i < this.rainVelocities.length; i++) {
-        positions[i * 3 + 1] -= this.rainVelocities[i]; 
-        positions[i * 3] -= 0.02; 
-
-        if (positions[i * 3 + 1] < -2) { 
-          positions[i * 3 + 1] = 10 + Math.random() * 5;
-          positions[i * 3] = (Math.random() - 0.5) * 25; 
-        }
-      }
-      this.rainGeometry.attributes.position.needsUpdate = true;
+    // OPTIMIZATION: Only pass elapsed time to shader, GPU handles the particle positions
+    if (this.rainMaterial.userData.shader && this.rainMaterial.opacity > 0) {
+        this.rainMaterial.userData.shader.uniforms.uTime.value = elapsedTime;
     }
   }
 }

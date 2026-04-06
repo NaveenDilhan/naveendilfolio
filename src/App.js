@@ -12,14 +12,15 @@ export default class App {
     this.size = { width: window.innerWidth, height: window.innerHeight };
     this.clock = new THREE.Clock();
     
+    // OPTIMIZATION: Track frame counts for throttling functions
+    this.frameCount = 0; 
+    
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
     this.highestProgress = 0; 
     this.wasCatHovered = false;
     this.isIntroDone = false; 
 
-    // FIX 1: Bind the render function ONCE here to prevent creating 
-    // 60 new functions a second, which triggers Garbage Collection stutters.
     this.render = this.render.bind(this);
 
     this.initScene();
@@ -39,8 +40,6 @@ export default class App {
 
     this.addEventListeners();
     
-    // FIX 2: Abandon requestAnimationFrame. Hand the rendering over to GSAP's internal ticker.
-    // This guarantees the camera math and WebGL render happen in the exact same millisecond.
     gsap.ticker.add(this.render);
   }
 
@@ -113,8 +112,6 @@ export default class App {
     const startExperience = () => {
       if (progressText) progressText.removeEventListener('click', startExperience);
       
-      // FIX 3: Kill the backdrop-filter on the loading screen BEFORE fading it.
-      // Animating opacity on a blurred DOM element over WebGL causes massive frame drops.
       const loadingScreen = document.getElementById('loading-screen');
       if (loadingScreen) {
           loadingScreen.style.backdropFilter = 'none';
@@ -123,7 +120,6 @@ export default class App {
 
       this.audioManager.playInitialRandom(); 
       
-      // Reset the Three clock so shaders start fresh without giant delta-time jumps
       this.clock.start();
 
       requestAnimationFrame(() => {
@@ -306,6 +302,7 @@ export default class App {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(-2, -2); 
     this.pointerDownPosition = new THREE.Vector2();
+    this.currentIntersects = []; // Initialize empty array for raycast results
 
     window.addEventListener('pointermove', (event) => {
       this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
@@ -335,6 +332,7 @@ export default class App {
       this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
       this.mouse.y = -(event.clientY / this.size.height) * 2 + 1;
 
+      // Force an immediate raycast update specifically for the click event
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const intersects = this.raycaster.intersectObjects(interactiveObjects, false);
 
@@ -388,6 +386,9 @@ export default class App {
 
   render() {
     const elapsedTime = this.clock.getElapsedTime();
+    
+    // OPTIMIZATION: Tick the frame counter for raycast throttling
+    this.frameCount++;
 
     if (this.controls && this.controls.enabled) {
         this.controls.update(); 
@@ -403,8 +404,14 @@ export default class App {
       }
 
       if (this.isIntroDone && this.room.interactiveObjects.length > 0) {
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-        const intersects = this.raycaster.intersectObjects(this.room.interactiveObjects, false);
+        
+        // OPTIMIZATION: Throttle raycaster to update only every 3 frames (~20 times a second)
+        if (this.frameCount % 3 === 0) {
+            this.raycaster.setFromCamera(this.mouse, this.camera);
+            this.currentIntersects = this.raycaster.intersectObjects(this.room.interactiveObjects, false);
+        }
+        
+        const intersects = this.currentIntersects || [];
         
         let shouldShowPointer = false;
         let isCatHoveredThisFrame = false; 
@@ -446,6 +453,5 @@ export default class App {
 
     this.room.update(elapsedTime);
     this.renderer.render(this.scene, this.camera);
-    // requestAnimationFrame is gone! GSAP handles it now.
   }
 }
