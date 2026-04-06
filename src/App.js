@@ -199,7 +199,7 @@ export default class App {
     });
     this.renderer.setSize(this.size.width, this.size.height);
     
-    const pixelRatioTarget = this.isMobile ? 1 : 2;
+    const pixelRatioTarget = this.isMobile ? 1.5 : 2;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioTarget));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   }
