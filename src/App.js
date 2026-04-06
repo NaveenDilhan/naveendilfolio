@@ -16,6 +16,11 @@ export default class App {
 
     this.highestProgress = 0; 
     this.wasCatHovered = false;
+    this.isIntroDone = false; 
+
+    // FIX 1: Bind the render function ONCE here to prevent creating 
+    // 60 new functions a second, which triggers Garbage Collection stutters.
+    this.render = this.render.bind(this);
 
     this.initScene();
     this.initCamera();
@@ -33,7 +38,10 @@ export default class App {
     );
 
     this.addEventListeners();
-    this.render();
+    
+    // FIX 2: Abandon requestAnimationFrame. Hand the rendering over to GSAP's internal ticker.
+    // This guarantees the camera math and WebGL render happen in the exact same millisecond.
+    gsap.ticker.add(this.render);
   }
 
   initThemeToggle() {
@@ -75,21 +83,20 @@ export default class App {
   }
 
   handleLoadComplete() {
-    // FIX 1: Pre-compile shaders so the GPU doesn't stutter on the very first frame of the animation
-    this.renderer.compile(this.scene, this.camera);
-
     const finalCameraPos = this.camera.position.clone();
 
-    // Set initial zoomed-in camera position
     this.camera.position.set(
       finalCameraPos.x * 0.2, 
       finalCameraPos.y * 0.3 + 1, 
       finalCameraPos.z * 0.2
     );
-    // Ensure the camera points at the target right from the start
     this.camera.lookAt(this.controls.target);
+    this.camera.updateProjectionMatrix();
 
     if (this.controls) this.controls.enabled = false;
+
+    this.renderer.compile(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera); 
 
     const progressText = document.getElementById('progress-text');
     const progressBar = document.getElementById('progress-bar');
@@ -106,21 +113,31 @@ export default class App {
     const startExperience = () => {
       if (progressText) progressText.removeEventListener('click', startExperience);
       
-      this.audioManager.playInitialRandom(); 
+      // FIX 3: Kill the backdrop-filter on the loading screen BEFORE fading it.
+      // Animating opacity on a blurred DOM element over WebGL causes massive frame drops.
+      const loadingScreen = document.getElementById('loading-screen');
+      if (loadingScreen) {
+          loadingScreen.style.backdropFilter = 'none';
+          loadingScreen.style.webkitBackdropFilter = 'none';
+      }
 
-      // FIX 2: Defer animation start to the next frame to clear DOM updates cleanly
+      this.audioManager.playInitialRandom(); 
+      
+      // Reset the Three clock so shaders start fresh without giant delta-time jumps
+      this.clock.start();
+
       requestAnimationFrame(() => {
         const tl = gsap.timeline({
           onComplete: () => {
-            // Re-enable controls only AFTER the camera finishes its GSAP journey
             if (this.controls) this.controls.enabled = true;
+            this.isIntroDone = true; 
             gsap.to('#theme-toggle-btn', { opacity: 1, scale: 1, duration: 0.5, pointerEvents: 'auto' });
           }
         });
         
-        tl.to('.loader-content', { opacity: 0, scale: 0.9, duration: 0.5, ease: 'power2.in' }) 
+        tl.to('.loader-content', { opacity: 0, scale: 0.9, duration: 0.4, ease: 'power2.in' }) 
           .to('#loading-screen', { opacity: 0, duration: 0.8, ease: 'power2.inOut', onComplete: () => {
-             document.getElementById('loading-screen').style.display = 'none'; 
+             loadingScreen.style.display = 'none'; 
           }})
           .to(this.camera.position, { 
             x: finalCameraPos.x, 
@@ -129,7 +146,6 @@ export default class App {
             duration: 3.5, 
             ease: 'power3.inOut',
             onUpdate: () => {
-               // FIX 3: Keep the camera perfectly focused on the center target during the tween
                this.camera.lookAt(this.controls.target);
             }
           }, "-=0.6"); 
@@ -311,7 +327,7 @@ export default class App {
 
       if (distance > 5) return; 
 
-      if (!this.room || this.modalContainer.classList.contains('active')) return;
+      if (!this.room || this.modalContainer.classList.contains('active') || !this.isIntroDone) return;
 
       const interactiveObjects = this.room.interactiveObjects;
       if (interactiveObjects.length === 0) return;
@@ -373,8 +389,6 @@ export default class App {
   render() {
     const elapsedTime = this.clock.getElapsedTime();
 
-    // FIX 4: Only update OrbitControls if they are enabled.
-    // This stops OrbitControls from applying damping math while GSAP is manually animating the camera!
     if (this.controls && this.controls.enabled) {
         this.controls.update(); 
     }
@@ -388,7 +402,7 @@ export default class App {
         });
       }
 
-      if (this.room.interactiveObjects.length > 0) {
+      if (this.isIntroDone && this.room.interactiveObjects.length > 0) {
         this.raycaster.setFromCamera(this.mouse, this.camera);
         const intersects = this.raycaster.intersectObjects(this.room.interactiveObjects, false);
         
@@ -432,6 +446,6 @@ export default class App {
 
     this.room.update(elapsedTime);
     this.renderer.render(this.scene, this.camera);
-    window.requestAnimationFrame(this.render.bind(this));
+    // requestAnimationFrame is gone! GSAP handles it now.
   }
 }
