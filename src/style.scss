@@ -313,6 +313,43 @@ body {
         letter-spacing: 1px;
       }
 
+      /* -------------------------------------
+         TECH STACK BADGES STYLING (UPDATED)
+         ------------------------------------- */
+      .tech-stack {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 20px;
+
+        .tech-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 6px 14px;
+          font-family: $font-content;
+          font-size: 0.9rem;
+          font-weight: bold;
+          letter-spacing: 0.5px;
+          color: #fff;
+          background: linear-gradient(135deg, rgba(255, 126, 179, 0.8), rgba(90, 156, 179, 0.8));
+          border: 1px solid rgba(255, 255, 255, 0.4);
+          border-radius: 30px;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          cursor: default;
+
+          &:hover {
+            transform: translateY(-4px) scale(1.05);
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            border-color: #fff;
+            box-shadow: 0 8px 20px rgba(255, 126, 179, 0.4);
+          }
+        }
+      }
+
       p {
         font-size: 1.2rem;
         margin-bottom: 15px;
