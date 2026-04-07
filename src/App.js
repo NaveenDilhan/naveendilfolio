@@ -12,7 +12,6 @@ export default class App {
     this.size = { width: window.innerWidth, height: window.innerHeight };
     this.clock = new THREE.Clock();
     
-    // OPTIMIZATION: Track frame counts for throttling functions
     this.frameCount = 0; 
     
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
@@ -94,7 +93,9 @@ export default class App {
 
     if (this.controls) this.controls.enabled = false;
 
+    // OPTIMIZATION: Render twice to strictly ensure shaders and textures are fully pushed to GPU
     this.renderer.compile(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera); 
     this.renderer.render(this.scene, this.camera); 
 
     const progressText = document.getElementById('progress-text');
@@ -118,33 +119,41 @@ export default class App {
           loadingScreen.style.webkitBackdropFilter = 'none';
       }
 
-      this.audioManager.playInitialRandom(); 
-      
-      this.clock.start();
+      gsap.to('.loader-content', { opacity: 0, scale: 0.9, duration: 0.2, ease: 'power2.in' });
 
+      // OPTIMIZATION: Double requestAnimationFrame guarantees the browser paints 
+      // the DOM updates (fading the text) BEFORE executing the heavy JS block.
       requestAnimationFrame(() => {
-        const tl = gsap.timeline({
-          onComplete: () => {
-            if (this.controls) this.controls.enabled = true;
-            this.isIntroDone = true; 
-            gsap.to('#theme-toggle-btn', { opacity: 1, scale: 1, duration: 0.5, pointerEvents: 'auto' });
-          }
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            this.audioManager.playInitialRandom(); 
+            this.clock.start();
+
+            const tl = gsap.timeline({
+              onComplete: () => {
+                if (this.controls) this.controls.enabled = true;
+                this.isIntroDone = true; 
+                gsap.to('#theme-toggle-btn', { opacity: 1, scale: 1, duration: 0.5, pointerEvents: 'auto' });
+                // OPTIMIZATION: Boot up the heavy video decoding only after intro finishes
+                if(this.room) this.room.startVideoPlayback(); 
+              }
+            });
+            
+            tl.to('#loading-screen', { opacity: 0, duration: 0.8, ease: 'power2.inOut', onComplete: () => {
+                 loadingScreen.style.display = 'none'; 
+              }})
+              .to(this.camera.position, { 
+                x: finalCameraPos.x, 
+                y: finalCameraPos.y, 
+                z: finalCameraPos.z,
+                duration: 3.5, 
+                ease: 'power3.inOut',
+                onUpdate: () => {
+                   this.camera.lookAt(this.controls.target);
+                }
+              }, "-=0.6");
+          }, 50); // Additional safety buffer
         });
-        
-        tl.to('.loader-content', { opacity: 0, scale: 0.9, duration: 0.4, ease: 'power2.in' }) 
-          .to('#loading-screen', { opacity: 0, duration: 0.8, ease: 'power2.inOut', onComplete: () => {
-             loadingScreen.style.display = 'none'; 
-          }})
-          .to(this.camera.position, { 
-            x: finalCameraPos.x, 
-            y: finalCameraPos.y, 
-            z: finalCameraPos.z,
-            duration: 3.5, 
-            ease: 'power3.inOut',
-            onUpdate: () => {
-               this.camera.lookAt(this.controls.target);
-            }
-          }, "-=0.6"); 
       });
     };
 
@@ -225,7 +234,6 @@ export default class App {
     const nextBtn = document.getElementById('next-work');
 
     if (this.workItems.length > 0 && prevBtn && nextBtn && this.workCounter) {
-      
       const updateWorksUI = () => {
         this.workItems.forEach((item, index) => {
           if (index === this.currentWorkIndex) {
@@ -302,7 +310,7 @@ export default class App {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(-2, -2); 
     this.pointerDownPosition = new THREE.Vector2();
-    this.currentIntersects = []; // Initialize empty array for raycast results
+    this.currentIntersects = []; 
 
     window.addEventListener('pointermove', (event) => {
       this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
@@ -332,7 +340,6 @@ export default class App {
       this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
       this.mouse.y = -(event.clientY / this.size.height) * 2 + 1;
 
-      // Force an immediate raycast update specifically for the click event
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const intersects = this.raycaster.intersectObjects(interactiveObjects, false);
 
@@ -387,7 +394,6 @@ export default class App {
   render() {
     const elapsedTime = this.clock.getElapsedTime();
     
-    // OPTIMIZATION: Tick the frame counter for raycast throttling
     this.frameCount++;
 
     if (this.controls && this.controls.enabled) {
@@ -405,10 +411,13 @@ export default class App {
 
       if (this.isIntroDone && this.room.interactiveObjects.length > 0) {
         
-        // OPTIMIZATION: Throttle raycaster to update only every 3 frames (~20 times a second)
         if (this.frameCount % 3 === 0) {
-            this.raycaster.setFromCamera(this.mouse, this.camera);
-            this.currentIntersects = this.raycaster.intersectObjects(this.room.interactiveObjects, false);
+            if (this.mouse.x >= -1 && this.mouse.x <= 1 && this.mouse.y >= -1 && this.mouse.y <= 1) {
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                this.currentIntersects = this.raycaster.intersectObjects(this.room.interactiveObjects, false);
+            } else {
+                this.currentIntersects = [];
+            }
         }
         
         const intersects = this.currentIntersects || [];

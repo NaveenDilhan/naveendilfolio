@@ -1,3 +1,4 @@
+// src/Room.js
 import * as THREE from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -91,6 +92,13 @@ export default class Room {
     this.initModel();
   }
 
+  // OPTIMIZATION: Start video manually after intro sequence
+  startVideoPlayback() {
+    if (this.video) {
+        this.video.play().catch(e => console.warn("Video autoplay prevented:", e));
+    }
+  }
+
   initRain() {
     const rainCount = this.isMobile ? 300 : 2000;
     this.rainGeometry = new THREE.BufferGeometry();
@@ -98,10 +106,10 @@ export default class Room {
     const rainSpeeds = new Float32Array(rainCount);
 
     for (let i = 0; i < rainCount; i++) {
-      rainPositions[i * 3] = (Math.random() - 0.5) * 25; // X
-      rainPositions[i * 3 + 1] = Math.random() * 20;     // Y
-      rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 25; // Z
-      rainSpeeds[i] = 0.15 + Math.random() * 0.1;        // Local speed
+      rainPositions[i * 3] = (Math.random() - 0.5) * 25; 
+      rainPositions[i * 3 + 1] = Math.random() * 20;     
+      rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 25; 
+      rainSpeeds[i] = 0.15 + Math.random() * 0.1;        
     }
 
     this.rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
@@ -127,16 +135,15 @@ export default class Room {
         `#include <begin_vertex>`,
         `
         #include <begin_vertex>
-        // Calculate drop mathematically based on time, wrapping around 15 units
         float yOffset = mod(position.y - (uTime * aSpeed * 60.0), 15.0);
         transformed.y = yOffset - 2.0; 
-        // Calculate wind drift
         transformed.x = mod(position.x - (uTime * 2.0) + 12.5, 25.0) - 12.5;
         `
       );
     };
 
     this.rainSystem = new THREE.Points(this.rainGeometry, this.rainMaterial);
+    this.rainSystem.frustumCulled = false; 
     this.scene.add(this.rainSystem);
   }
 
@@ -164,6 +171,7 @@ export default class Room {
 
     this.smokeMesh = new THREE.Mesh(smokeGeometry, this.smokeMaterial);
     this.smokeMesh.scale.set(0.15, 0.4, 0.15);
+    this.smokeMesh.frustumCulled = false; 
     
     if (this.isMobile) {
         this.smokeMesh.visible = false;
@@ -178,8 +186,8 @@ export default class Room {
     this.video.muted = true; 
     this.video.playsInline = true;
     
-    this.video.play().catch(e => console.warn("Video autoplay prevented:", e)); 
-
+    // OPTIMIZATION: Do not call play() here. Defer to startVideoPlayback().
+    
     this.videoTexture = new THREE.VideoTexture(this.video);
     this.videoTexture.colorSpace = THREE.SRGBColorSpace;
     this.videoTexture.flipY = false; 
@@ -235,7 +243,6 @@ export default class Room {
       let pictureIndex = 0;
 
       glb.scene.traverse((child) => {
-        // Create a single lower-case version of the name to prevent case-sensitive mismatches further down
         const childNameLower = child.name.toLowerCase();
         
         if (childNameLower.includes("cup")) {
@@ -253,6 +260,12 @@ export default class Room {
         }
 
         if (child.isMesh) {
+          // OPTIMIZATION: Pre-calculate bounding spheres & boxes to prevent frame-1 stutter
+          if (child.geometry) {
+             child.geometry.computeBoundingSphere();
+             child.geometry.computeBoundingBox();
+          }
+
           let interactiveGroup = null;
           let currentParent = child;
           let isInteractive = false;
@@ -415,7 +428,6 @@ export default class Room {
             this.pointerObjects.push(child);
           }
 
-          // FIX: Utilize childNameLower to make these checks case-insensitive, preventing dynamic objects from being frozen incorrectly
           const isDynamic = 
             childNameLower.includes("vga_fans") || 
             childNameLower.includes("chair_top") || 

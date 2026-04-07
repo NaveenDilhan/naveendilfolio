@@ -1,3 +1,4 @@
+// src/AudioManager.js
 import gsap from 'gsap'; 
 
 export default class AudioManager {
@@ -11,20 +12,23 @@ export default class AudioManager {
     this.currentTrackIndex = Math.floor(Math.random() * this.tracks.length);
     
     this.bgm = new Audio(this.tracks[this.currentTrackIndex].src);
+    this.bgm.preload = 'auto'; // OPTIMIZATION: Force full preload to prevent audio cut-off
     this.bgm.loop = false; 
     this.bgm.volume = 0.4;
 
     this.clickSound = new Audio('/audio/sfx/click/bubble.ogg'); 
+    this.clickSound.preload = 'auto';
     this.clickSound.volume = 0.6;
 
     this.meowSound = new Audio('/audio/sfx/meow.ogg'); 
+    this.meowSound.preload = 'auto';
     this.meowSound.volume = 0.6;
 
-    // --- NEW: Rain Sound Setup ---
     this.rainSound = new Audio('/audio/sfx/rain.ogg'); 
-    this.rainSound.loop = true; // Rain should loop indefinitely
-    this.rainSound.volume = 0; // Start at 0 so we can fade it in smoothly
-    this.targetRainVolume = 1; // Low volume so it mixes well with music
+    this.rainSound.preload = 'auto';
+    this.rainSound.loop = true; 
+    this.rainSound.volume = 0; 
+    this.targetRainVolume = 1; 
 
     this.isPlaying = false;
     this.hideTimeout = null;
@@ -80,12 +84,10 @@ export default class AudioManager {
     this.meowSound.play().catch(() => {}); 
   }
 
-  // --- NEW: Fade In Rain ---
   playRain() {
     if(!this.rainSound) return;
     this.rainSound.play().catch(() => {});
     
-    // Smooth 2-second fade in (matches the visual night mode transition)
     gsap.to(this.rainSound, { 
       volume: this.targetRainVolume, 
       duration: 2, 
@@ -93,11 +95,9 @@ export default class AudioManager {
     });
   }
 
-  // --- NEW: Fade Out Rain ---
   stopRain() {
     if(!this.rainSound) return;
     
-    // Smooth 2-second fade out, then pause the audio to save resources
     gsap.to(this.rainSound, { 
       volume: 0, 
       duration: 2, 
