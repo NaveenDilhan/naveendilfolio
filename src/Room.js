@@ -197,7 +197,6 @@ export default class Room {
       dayTexture.minFilter = THREE.LinearFilter;
       this.loadedTextures.day[key] = dayTexture;
 
-      // FIX: Only load the heavy night maps if NOT on mobile device
       if (paths.night && !this.isMobile) {
         const nightTexture = textureLoader.load(paths.night);
         nightTexture.flipY = false;
@@ -236,18 +235,20 @@ export default class Room {
       let pictureIndex = 0;
 
       glb.scene.traverse((child) => {
+        // Create a single lower-case version of the name to prevent case-sensitive mismatches further down
+        const childNameLower = child.name.toLowerCase();
         
-        if (child.name.toLowerCase().includes("cup")) {
+        if (childNameLower.includes("cup")) {
           child.add(this.smokeMesh);
           this.smokeMesh.position.set(0, 0.1, 0); 
         }
 
-        if (child.name.toLowerCase().includes("chair_top")) {
+        if (childNameLower.includes("chair_top")) {
           this.chairTop = child;
           this.chairTop.userData.initialRotation = child.rotation.clone();
         }
 
-        if (child.name.includes("VGA_Fans")) {
+        if (childNameLower.includes("vga_fans")) {
           this.vgaFans.push(child);
         }
 
@@ -255,7 +256,7 @@ export default class Room {
           let interactiveGroup = null;
           let currentParent = child;
           let isInteractive = false;
-          let actionTargetName = child.name.toLowerCase();
+          let actionTargetName = childNameLower;
 
           while (currentParent) {
             const parentNameLower = currentParent.name.toLowerCase();
@@ -326,7 +327,6 @@ export default class Room {
             this.swayMaterials.push(child.material);
           }
 
-          // If on mobile, this will correctly evaluate to undefined/false and skip the night shader
           let hasNightMap = matchedKey && this.loadedTextures.night[matchedKey];
           
           if (hasNightMap && !isCustomPicture) {
@@ -388,7 +388,6 @@ export default class Room {
 
           if (child.material) {
              if (!child.name.includes("Computer_Screen") && !child.material.name.includes("RGB_Fan") && !child.material.name.includes("Glass")) {
-                // Optimization: Avoid pushing redundant cached materials
                 if (!this.sceneMaterials.includes(child.material)) {
                     this.sceneMaterials.push(child.material);
                 }
@@ -416,9 +415,10 @@ export default class Room {
             this.pointerObjects.push(child);
           }
 
+          // FIX: Utilize childNameLower to make these checks case-insensitive, preventing dynamic objects from being frozen incorrectly
           const isDynamic = 
-            child.name.includes("VGA_Fans") || 
-            child.name.includes("chair_top") || 
+            childNameLower.includes("vga_fans") || 
+            childNameLower.includes("chair_top") || 
             isPlant || 
             isInteractive; 
 
@@ -440,15 +440,12 @@ export default class Room {
 
     this.sceneMaterials.forEach(mat => {
       if (mat.userData.mixRatio) {
-        // Desktop: Mix to the heavy night texture bake
         gsap.to(mat.userData.mixRatio, {
           value: isNight ? 1 : 0,
           duration: duration,
           ease: 'power2.inOut'
         });
       } else if (mat.color) {
-        // Mobile: Fake night mode using a cool dark grey-blue moonlight tint 
-        // 0x3a4556 gives a very convincing night feel when multiplied onto bright day bakes
         const targetColor = isNight ? new THREE.Color(0x3a4556) : new THREE.Color(0xffffff);
         gsap.to(mat.color, {
           r: targetColor.r, g: targetColor.g, b: targetColor.b,
