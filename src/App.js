@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import gsap from 'gsap';
-import Stats from 'stats.js'; // <-- Added Stats.js
+import Stats from 'stats.js'; 
 import { CAMERA_VIEWS } from './config.js';
 import Room from './Room.js';
 import AudioManager from './AudioManager.js'; 
@@ -14,7 +14,7 @@ export default class App {
     this.clock = new THREE.Clock();
     
     this.frameCount = 0; 
-    this.slowFrameCount = 0; // For Dynamic Resolution
+    this.slowFrameCount = 0; 
     
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
@@ -24,7 +24,7 @@ export default class App {
 
     this.render = this.render.bind(this);
 
-    this.initStats(); // <-- Initialize the monitor
+    this.initStats(); 
     this.initScene();
     this.initCamera();
     this.initRenderer();
@@ -46,12 +46,10 @@ export default class App {
     gsap.ticker.add(this.render);
   }
 
-  // OPTIMIZATION: Real-Time Visual Monitor
   initStats() {
     this.stats = new Stats();
-    this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+    this.stats.showPanel(0); 
     
-    // Position it at the top left
     this.stats.dom.style.position = 'absolute';
     this.stats.dom.style.top = '0px';
     this.stats.dom.style.left = '0px';
@@ -61,6 +59,9 @@ export default class App {
   }
 
   initThemeToggle() {
+    // OPTIMIZATION: Completely remove night mode button on mobile
+    if (this.isMobile) return;
+
     const btn = document.createElement('button');
     btn.id = 'theme-toggle-btn';
     btn.innerHTML = '🌙';
@@ -148,7 +149,9 @@ export default class App {
               onComplete: () => {
                 if (this.controls) this.controls.enabled = true;
                 this.isIntroDone = true; 
-                gsap.to('#theme-toggle-btn', { opacity: 1, scale: 1, duration: 0.5, pointerEvents: 'auto' });
+                if (!this.isMobile) {
+                    gsap.to('#theme-toggle-btn', { opacity: 1, scale: 1, duration: 0.5, pointerEvents: 'auto' });
+                }
                 if(this.room) this.room.startVideoPlayback(); 
               }
             });
@@ -222,11 +225,11 @@ export default class App {
     });
     this.renderer.setSize(this.size.width, this.size.height);
     
-    // Store target pixel ratio for Dynamic Resolution Scaling
-    this.targetPixelRatio = this.isMobile ? 1.5 : 2;
+    // OPTIMIZATION: Start mobile at pixel ratio 1.0 to guarantee smooth frames
+    this.targetPixelRatio = this.isMobile ? 1.0 : Math.min(window.devicePixelRatio, 2);
     this.currentPixelRatio = this.targetPixelRatio;
     
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.currentPixelRatio));
+    this.renderer.setPixelRatio(this.currentPixelRatio);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   }
 
@@ -326,28 +329,23 @@ export default class App {
   initRaycaster() {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(-2, -2); 
-    this.lastRaycastMouse = new THREE.Vector2(-2, -2); // <-- Added for optimization
+    this.lastRaycastMouse = new THREE.Vector2(-2, -2); 
     this.pointerDownPosition = new THREE.Vector2();
     this.currentIntersects = []; 
 
     window.addEventListener('pointermove', (event) => {
+      if (this.isMobile) return; // Prevent unnecessary variable updates on mobile swipe
       this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
       this.mouse.y = -(event.clientY / this.size.height) * 2 + 1;
     });
 
     window.addEventListener('pointerdown', (event) => {
       this.pointerDownPosition.set(event.clientX, event.clientY);
-      this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
-      this.mouse.y = -(event.clientY / this.size.height) * 2 + 1;
     });
 
     window.addEventListener('pointerup', (event) => {
       const distance = Math.hypot(event.clientX - this.pointerDownPosition.x, event.clientY - this.pointerDownPosition.y);
       
-      if (this.isMobile) {
-        setTimeout(() => { this.mouse.set(-2, -2); }, 100);
-      }
-
       if (distance > 5) return; 
 
       if (!this.room || this.modalContainer.classList.contains('active') || !this.isIntroDone) return;
@@ -381,6 +379,11 @@ export default class App {
         else if (actionNameLower.includes('about')) this.openModal('about');
         else if (actionNameLower.includes('contact')) this.openModal('contact');
       }
+
+      // Reset touch coordinates to avoid ghost clicks/hovers
+      if (this.isMobile) {
+        setTimeout(() => { this.mouse.set(-2, -2); }, 100);
+      }
     });
 
     window.addEventListener('pointercancel', () => {
@@ -402,10 +405,9 @@ export default class App {
 
       this.renderer.setSize(this.size.width, this.size.height);
       
-      // Reset Dynamic Resolution scaling on resize
-      this.targetPixelRatio = this.isMobile ? 1.5 : 2;
+      this.targetPixelRatio = this.isMobile ? 1.0 : Math.min(window.devicePixelRatio, 2);
       this.currentPixelRatio = this.targetPixelRatio;
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.currentPixelRatio));
+      this.renderer.setPixelRatio(this.currentPixelRatio);
 
       this.camera.aspect = this.size.width / this.size.height;
       this.camera.updateProjectionMatrix();
@@ -413,25 +415,19 @@ export default class App {
   }
 
   render() {
-    // Start measuring performance
     if (this.stats) this.stats.begin();
 
-    // Use getDelta to calculate FPS drops, use clock.elapsedTime for animations
     const delta = this.clock.getDelta();
     const elapsedTime = this.clock.elapsedTime;
     
     this.frameCount++;
 
-    // OPTIMIZATION: Dynamic Resolution Scaling
-    // If a frame takes longer than ~25ms (which means dropping below 40 FPS)
-    if (delta > 0.025) { 
+    if (delta > 0.025 && !this.isMobile) { 
       this.slowFrameCount++;
-      // If it struggles consistently for 30 frames and we aren't at baseline pixel ratio
       if (this.slowFrameCount > 30 && this.currentPixelRatio > 1.0) {
         this.currentPixelRatio = Math.max(1.0, this.currentPixelRatio - 0.25);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.currentPixelRatio));
-        this.slowFrameCount = 0; // Reset counter
-        console.log(`Performance drop detected. Scaled pixel ratio down to ${this.currentPixelRatio}`);
+        this.slowFrameCount = 0; 
       }
     } else {
       this.slowFrameCount = 0;
@@ -452,66 +448,66 @@ export default class App {
 
       if (this.isIntroDone && this.room.interactiveObjects.length > 0) {
         
-        // OPTIMIZATION: Raycasting Check
-        const mouseMoved = this.mouse.x !== this.lastRaycastMouse.x || this.mouse.y !== this.lastRaycastMouse.y;
+        // OPTIMIZATION: Entirely skip continuous hover raycasting on mobile devices
+        if (!this.isMobile) {
+            const mouseMoved = this.mouse.x !== this.lastRaycastMouse.x || this.mouse.y !== this.lastRaycastMouse.y;
 
-        if (this.frameCount % 3 === 0) {
-            // Only fire raycaster if mouse actually moved
-            if (mouseMoved && this.mouse.x >= -1 && this.mouse.x <= 1 && this.mouse.y >= -1 && this.mouse.y <= 1) {
-                this.raycaster.setFromCamera(this.mouse, this.camera);
-                this.currentIntersects = this.raycaster.intersectObjects(this.room.interactiveObjects, false);
-                this.lastRaycastMouse.copy(this.mouse); // Save current position
-            } else if (!mouseMoved) {
-                // Do nothing, reuse previous `this.currentIntersects`
-            } else {
-                this.currentIntersects = [];
+            if (this.frameCount % 3 === 0) {
+                if (mouseMoved && this.mouse.x >= -1 && this.mouse.x <= 1 && this.mouse.y >= -1 && this.mouse.y <= 1) {
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                    this.currentIntersects = this.raycaster.intersectObjects(this.room.interactiveObjects, false);
+                    this.lastRaycastMouse.copy(this.mouse); 
+                } else if (!mouseMoved) {
+                    // Do nothing, reuse previous
+                } else {
+                    this.currentIntersects = [];
+                }
             }
+            
+            const intersects = this.currentIntersects || [];
+            
+            let shouldShowPointer = false;
+            let isCatHoveredThisFrame = false; 
+
+            if (intersects.length > 0 && !this.modalContainer.classList.contains('active')) {
+              const hoveredObject = intersects[0].object;
+              const interactiveGroup = hoveredObject.userData.interactiveGroup; 
+              
+              const actionNameLower = hoveredObject.userData.actionName || hoveredObject.name.toLowerCase();
+
+              const isPointerObject = actionNameLower.includes('pointer') || 
+                                      actionNameLower.includes('github') || 
+                                      actionNameLower.includes('linkedin') || 
+                                      actionNameLower.includes('instagram') ||
+                                      actionNameLower.includes('works') ||
+                                      actionNameLower.includes('about') ||
+                                      actionNameLower.includes('contact') ||
+                                      actionNameLower.includes('speaker') ||
+                                      actionNameLower.includes('cat'); 
+
+              if (isPointerObject) shouldShowPointer = true;
+              if (actionNameLower.includes('cat')) isCatHoveredThisFrame = true;
+
+              const isRaycastObject = actionNameLower.includes('raycaster') || isPointerObject;
+
+              if (isRaycastObject && interactiveGroup && interactiveGroup.userData.originalScale) {
+                interactiveGroup.userData.targetScale.copy(interactiveGroup.userData.originalScale).multiplyScalar(1.2);
+              }
+            }
+            
+            document.body.style.cursor = shouldShowPointer ? 'pointer' : 'default';
+
+            if (isCatHoveredThisFrame && !this.wasCatHovered) {
+              this.audioManager.playMeow();
+            }
+            this.wasCatHovered = isCatHoveredThisFrame;
         }
-        
-        const intersects = this.currentIntersects || [];
-        
-        let shouldShowPointer = false;
-        let isCatHoveredThisFrame = false; 
-
-        if (intersects.length > 0 && !this.modalContainer.classList.contains('active')) {
-          const hoveredObject = intersects[0].object;
-          const interactiveGroup = hoveredObject.userData.interactiveGroup; 
-          
-          const actionNameLower = hoveredObject.userData.actionName || hoveredObject.name.toLowerCase();
-
-          const isPointerObject = actionNameLower.includes('pointer') || 
-                                  actionNameLower.includes('github') || 
-                                  actionNameLower.includes('linkedin') || 
-                                  actionNameLower.includes('instagram') ||
-                                  actionNameLower.includes('works') ||
-                                  actionNameLower.includes('about') ||
-                                  actionNameLower.includes('contact') ||
-                                  actionNameLower.includes('speaker') ||
-                                  actionNameLower.includes('cat'); 
-
-          if (isPointerObject) shouldShowPointer = true;
-          if (actionNameLower.includes('cat')) isCatHoveredThisFrame = true;
-
-          const isRaycastObject = actionNameLower.includes('raycaster') || isPointerObject;
-
-          if (isRaycastObject && interactiveGroup && interactiveGroup.userData.originalScale) {
-            interactiveGroup.userData.targetScale.copy(interactiveGroup.userData.originalScale).multiplyScalar(1.2);
-          }
-        }
-        
-        document.body.style.cursor = shouldShowPointer ? 'pointer' : 'default';
-
-        if (isCatHoveredThisFrame && !this.wasCatHovered) {
-          this.audioManager.playMeow();
-        }
-        this.wasCatHovered = isCatHoveredThisFrame;
       }
     }
 
     this.room.update(elapsedTime);
     this.renderer.render(this.scene, this.camera);
 
-    // Stop measuring performance
     if (this.stats) this.stats.end();
   }
 }

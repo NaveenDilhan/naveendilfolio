@@ -101,7 +101,10 @@ export default class Room {
   }
 
   initRain() {
-    const rainCount = this.isMobile ? 300 : 2000;
+    // OPTIMIZATION: Completely skip rain generation on mobile
+    if (this.isMobile) return;
+
+    const rainCount = 2000;
     this.rainGeometry = new THREE.BufferGeometry();
     const rainPositions = new Float32Array(rainCount * 3);
     const rainSpeeds = new Float32Array(rainCount);
@@ -149,6 +152,9 @@ export default class Room {
   }
 
   initSmoke() {
+    // OPTIMIZATION: Completely skip smoke generation and shaders on mobile
+    if (this.isMobile) return;
+
     const textureLoader = new THREE.TextureLoader();
     this.perlinTexture = textureLoader.load('/shaders/perlin.png'); 
     this.perlinTexture.wrapS = THREE.RepeatWrapping;
@@ -173,10 +179,6 @@ export default class Room {
     this.smokeMesh = new THREE.Mesh(smokeGeometry, this.smokeMaterial);
     this.smokeMesh.scale.set(0.15, 0.4, 0.15);
     this.smokeMesh.frustumCulled = false; 
-    
-    if (this.isMobile) {
-        this.smokeMesh.visible = false;
-    }
   }
 
   initVideo() {
@@ -256,7 +258,7 @@ export default class Room {
       glb.scene.traverse((child) => {
         const childNameLower = child.name.toLowerCase();
         
-        if (childNameLower.includes("cup")) {
+        if (childNameLower.includes("cup") && !this.isMobile && this.smokeMesh) {
           child.add(this.smokeMesh);
           this.smokeMesh.position.set(0, 0.1, 0); 
         }
@@ -344,14 +346,16 @@ export default class Room {
             child.material = this.sharedRgbMaterial; 
           }
 
-          let isPlant = child.name.includes("Med_Plant");
+          // OPTIMIZATION: Disable plant sway on mobile
+          let isPlant = child.name.includes("Med_Plant") && !this.isMobile;
           if (isPlant && child.material) {
             child.material = child.material.clone();
             child.material.userData.shaderUniforms = { uTime: { value: 0 } };
             this.swayMaterials.push(child.material);
           }
 
-          let hasNightMap = matchedKey && TEXTURE_MAP[matchedKey].night;
+          // OPTIMIZATION: Strictly disable night map compilation logic on mobile entirely
+          let hasNightMap = matchedKey && TEXTURE_MAP[matchedKey].night && !this.isMobile;
           
           if (hasNightMap && !isCustomPicture) {
             child.material.userData.mixRatio = { value: 0 };
@@ -460,6 +464,8 @@ export default class Room {
   }
 
   toggleNightMode(isNight) {
+    if (this.isMobile) return; // Failsafe
+    
     this.isNight = isNight;
     const duration = 2; 
 
@@ -482,19 +488,21 @@ export default class Room {
 
     this.glassMaterials.forEach(mat => {
       gsap.to(mat, {
-        envMapIntensity: isNight ? 0.1 : (this.isMobile ? 1.5 : 1),
+        envMapIntensity: isNight ? 0.1 : 1,
         duration: duration,
         ease: 'power2.inOut'
       });
     });
 
-    gsap.to(this.rainMaterial, {
-      opacity: isNight ? 0.6 : 0,
-      duration: duration,
-      ease: 'power2.inOut'
-    });
+    if (this.rainMaterial) {
+      gsap.to(this.rainMaterial, {
+        opacity: isNight ? 0.6 : 0,
+        duration: duration,
+        ease: 'power2.inOut'
+      });
+    }
 
-    if (this.smokeMaterial && !this.isMobile) {
+    if (this.smokeMaterial) {
        gsap.to(this.smokeMaterial, {
          opacity: isNight ? 0.4 : 1.0,
          duration: duration,
@@ -529,12 +537,14 @@ export default class Room {
       }
     });
 
-    if (this.smokeMaterial && this.smokeMaterial.uniforms && !this.isMobile) {
-       this.smokeMaterial.uniforms.uTime.value = elapsedTime;
-    }
+    if (!this.isMobile) {
+      if (this.smokeMaterial && this.smokeMaterial.uniforms) {
+         this.smokeMaterial.uniforms.uTime.value = elapsedTime;
+      }
 
-    if (this.rainMaterial.userData.shader && this.rainMaterial.opacity > 0) {
-        this.rainMaterial.userData.shader.uniforms.uTime.value = elapsedTime;
+      if (this.rainMaterial && this.rainMaterial.userData.shader && this.rainMaterial.opacity > 0) {
+          this.rainMaterial.userData.shader.uniforms.uTime.value = elapsedTime;
+      }
     }
   }
 }
