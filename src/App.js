@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import gsap from 'gsap';
+import Stats from 'stats.js'; // <-- Added Stats.js
 import { CAMERA_VIEWS } from './config.js';
 import Room from './Room.js';
 import AudioManager from './AudioManager.js'; 
@@ -13,6 +14,7 @@ export default class App {
     this.clock = new THREE.Clock();
     
     this.frameCount = 0; 
+    this.slowFrameCount = 0; // For Dynamic Resolution
     
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
@@ -22,6 +24,7 @@ export default class App {
 
     this.render = this.render.bind(this);
 
+    this.initStats(); // <-- Initialize the monitor
     this.initScene();
     this.initCamera();
     this.initRenderer();
@@ -33,6 +36,7 @@ export default class App {
     
     this.room = new Room(
         this.scene, 
+        this.renderer, 
         this.handleLoadProgress.bind(this), 
         this.handleLoadComplete.bind(this)
     );
@@ -40,6 +44,20 @@ export default class App {
     this.addEventListeners();
     
     gsap.ticker.add(this.render);
+  }
+
+  // OPTIMIZATION: Real-Time Visual Monitor
+  initStats() {
+    this.stats = new Stats();
+    this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+    
+    // Position it at the top left
+    this.stats.dom.style.position = 'absolute';
+    this.stats.dom.style.top = '0px';
+    this.stats.dom.style.left = '0px';
+    this.stats.dom.style.zIndex = '9999';
+    
+    document.body.appendChild(this.stats.dom);
   }
 
   initThemeToggle() {
@@ -93,7 +111,6 @@ export default class App {
 
     if (this.controls) this.controls.enabled = false;
 
-    // OPTIMIZATION: Render twice to strictly ensure shaders and textures are fully pushed to GPU
     this.renderer.compile(this.scene, this.camera);
     this.renderer.render(this.scene, this.camera); 
     this.renderer.render(this.scene, this.camera); 
@@ -121,8 +138,6 @@ export default class App {
 
       gsap.to('.loader-content', { opacity: 0, scale: 0.9, duration: 0.2, ease: 'power2.in' });
 
-      // OPTIMIZATION: Double requestAnimationFrame guarantees the browser paints 
-      // the DOM updates (fading the text) BEFORE executing the heavy JS block.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setTimeout(() => {
@@ -134,7 +149,6 @@ export default class App {
                 if (this.controls) this.controls.enabled = true;
                 this.isIntroDone = true; 
                 gsap.to('#theme-toggle-btn', { opacity: 1, scale: 1, duration: 0.5, pointerEvents: 'auto' });
-                // OPTIMIZATION: Boot up the heavy video decoding only after intro finishes
                 if(this.room) this.room.startVideoPlayback(); 
               }
             });
@@ -152,7 +166,7 @@ export default class App {
                    this.camera.lookAt(this.controls.target);
                 }
               }, "-=0.6");
-          }, 50); // Additional safety buffer
+          }, 50);
         });
       });
     };
@@ -208,8 +222,11 @@ export default class App {
     });
     this.renderer.setSize(this.size.width, this.size.height);
     
-    const pixelRatioTarget = this.isMobile ? 1.5 : 2;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioTarget));
+    // Store target pixel ratio for Dynamic Resolution Scaling
+    this.targetPixelRatio = this.isMobile ? 1.5 : 2;
+    this.currentPixelRatio = this.targetPixelRatio;
+    
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.currentPixelRatio));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   }
 
@@ -309,6 +326,7 @@ export default class App {
   initRaycaster() {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(-2, -2); 
+    this.lastRaycastMouse = new THREE.Vector2(-2, -2); // <-- Added for optimization
     this.pointerDownPosition = new THREE.Vector2();
     this.currentIntersects = []; 
 
@@ -383,8 +401,11 @@ export default class App {
       }
 
       this.renderer.setSize(this.size.width, this.size.height);
-      const pixelRatioTarget = this.isMobile ? 1 : 2;
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioTarget));
+      
+      // Reset Dynamic Resolution scaling on resize
+      this.targetPixelRatio = this.isMobile ? 1.5 : 2;
+      this.currentPixelRatio = this.targetPixelRatio;
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.currentPixelRatio));
 
       this.camera.aspect = this.size.width / this.size.height;
       this.camera.updateProjectionMatrix();
@@ -392,9 +413,29 @@ export default class App {
   }
 
   render() {
-    const elapsedTime = this.clock.getElapsedTime();
+    // Start measuring performance
+    if (this.stats) this.stats.begin();
+
+    // Use getDelta to calculate FPS drops, use clock.elapsedTime for animations
+    const delta = this.clock.getDelta();
+    const elapsedTime = this.clock.elapsedTime;
     
     this.frameCount++;
+
+    // OPTIMIZATION: Dynamic Resolution Scaling
+    // If a frame takes longer than ~25ms (which means dropping below 40 FPS)
+    if (delta > 0.025) { 
+      this.slowFrameCount++;
+      // If it struggles consistently for 30 frames and we aren't at baseline pixel ratio
+      if (this.slowFrameCount > 30 && this.currentPixelRatio > 1.0) {
+        this.currentPixelRatio = Math.max(1.0, this.currentPixelRatio - 0.25);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.currentPixelRatio));
+        this.slowFrameCount = 0; // Reset counter
+        console.log(`Performance drop detected. Scaled pixel ratio down to ${this.currentPixelRatio}`);
+      }
+    } else {
+      this.slowFrameCount = 0;
+    }
 
     if (this.controls && this.controls.enabled) {
         this.controls.update(); 
@@ -411,10 +452,17 @@ export default class App {
 
       if (this.isIntroDone && this.room.interactiveObjects.length > 0) {
         
+        // OPTIMIZATION: Raycasting Check
+        const mouseMoved = this.mouse.x !== this.lastRaycastMouse.x || this.mouse.y !== this.lastRaycastMouse.y;
+
         if (this.frameCount % 3 === 0) {
-            if (this.mouse.x >= -1 && this.mouse.x <= 1 && this.mouse.y >= -1 && this.mouse.y <= 1) {
+            // Only fire raycaster if mouse actually moved
+            if (mouseMoved && this.mouse.x >= -1 && this.mouse.x <= 1 && this.mouse.y >= -1 && this.mouse.y <= 1) {
                 this.raycaster.setFromCamera(this.mouse, this.camera);
                 this.currentIntersects = this.raycaster.intersectObjects(this.room.interactiveObjects, false);
+                this.lastRaycastMouse.copy(this.mouse); // Save current position
+            } else if (!mouseMoved) {
+                // Do nothing, reuse previous `this.currentIntersects`
             } else {
                 this.currentIntersects = [];
             }
@@ -462,5 +510,8 @@ export default class App {
 
     this.room.update(elapsedTime);
     this.renderer.render(this.scene, this.camera);
+
+    // Stop measuring performance
+    if (this.stats) this.stats.end();
   }
 }

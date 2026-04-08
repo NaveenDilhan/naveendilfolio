@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { TEXTURE_MAP } from './config.js';
 import gsap from 'gsap'; 
 
@@ -49,8 +50,9 @@ void main() {
 `;
 
 export default class Room {
-  constructor(scene, onProgress, onLoad) {
+  constructor(scene, renderer, onProgress, onLoad) {
     this.scene = scene;
+    this.renderer = renderer;
     this.onProgress = onProgress;
     this.onLoad = onLoad;
     
@@ -92,7 +94,6 @@ export default class Room {
     this.initModel();
   }
 
-  // OPTIMIZATION: Start video manually after intro sequence
   startVideoPlayback() {
     if (this.video) {
         this.video.play().catch(e => console.warn("Video autoplay prevented:", e));
@@ -186,8 +187,6 @@ export default class Room {
     this.video.muted = true; 
     this.video.playsInline = true;
     
-    // OPTIMIZATION: Do not call play() here. Defer to startVideoPlayback().
-    
     this.videoTexture = new THREE.VideoTexture(this.video);
     this.videoTexture.colorSpace = THREE.SRGBColorSpace;
     this.videoTexture.flipY = false; 
@@ -196,21 +195,35 @@ export default class Room {
   }
 
   initTextures() {
+    const ktx2Loader = new KTX2Loader(THREE.DefaultLoadingManager)
+      .setTranscoderPath('/basis/') 
+      .detectSupport(this.renderer);
+
     const textureLoader = new THREE.TextureLoader(); 
+    this.materialCache = {}; 
     
     Object.entries(TEXTURE_MAP).forEach(([key, paths]) => {
-      const dayTexture = textureLoader.load(paths.day);
-      dayTexture.flipY = false;
-      dayTexture.colorSpace = THREE.SRGBColorSpace; 
-      dayTexture.minFilter = THREE.LinearFilter;
-      this.loadedTextures.day[key] = dayTexture;
+      ktx2Loader.load(paths.day, (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace; 
+        texture.minFilter = THREE.LinearFilter;
+        this.loadedTextures.day[key] = texture;
+
+        if (this.materialCache[key]) {
+            this.materialCache[key].map = texture;
+            this.materialCache[key].needsUpdate = true;
+        }
+      });
 
       if (paths.night && !this.isMobile) {
-        const nightTexture = textureLoader.load(paths.night);
-        nightTexture.flipY = false;
-        nightTexture.colorSpace = THREE.SRGBColorSpace;
-        nightTexture.minFilter = THREE.LinearFilter; 
-        this.loadedTextures.night[key] = nightTexture;
+        ktx2Loader.load(paths.night, (texture) => {
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.minFilter = THREE.LinearFilter; 
+          this.loadedTextures.night[key] = texture;
+
+          if (this.materialCache[key] && this.materialCache[key].userData.shader) {
+            this.materialCache[key].userData.shader.uniforms.tNight.value = texture;
+          }
+        });
       }
     });
 
@@ -237,8 +250,6 @@ export default class Room {
     const gltfLoader = new GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);
 
-    const materialCache = {};
-
     gltfLoader.load("/models/Room_Portfolio_V5.glb", (glb) => {
       let pictureIndex = 0;
 
@@ -260,7 +271,6 @@ export default class Room {
         }
 
         if (child.isMesh) {
-          // OPTIMIZATION: Pre-calculate bounding spheres & boxes to prevent frame-1 stutter
           if (child.geometry) {
              child.geometry.computeBoundingSphere();
              child.geometry.computeBoundingBox();
@@ -294,17 +304,18 @@ export default class Room {
              isCustomPicture = true;
           }
 
-          const matchedKey = Object.keys(this.loadedTextures.day).find((key) => child.name.includes(key));
+          const matchedKey = Object.keys(TEXTURE_MAP).find((key) => child.name.includes(key));
+          
           if (matchedKey && !isCustomPicture) {
             if (child.material) child.material.dispose();
             
-            if (!materialCache[matchedKey]) {
-                materialCache[matchedKey] = new THREE.MeshBasicMaterial({ 
-                  map: this.loadedTextures.day[matchedKey],
+            if (!this.materialCache[matchedKey]) {
+                this.materialCache[matchedKey] = new THREE.MeshBasicMaterial({ 
+                  map: this.loadedTextures.day[matchedKey] || null, 
                   color: 0xffffff 
                 });
             }
-            child.material = materialCache[matchedKey];
+            child.material = this.materialCache[matchedKey];
           }
           
           if (child.material && child.material.name.includes("Glass")) {
@@ -340,7 +351,7 @@ export default class Room {
             this.swayMaterials.push(child.material);
           }
 
-          let hasNightMap = matchedKey && this.loadedTextures.night[matchedKey];
+          let hasNightMap = matchedKey && TEXTURE_MAP[matchedKey].night;
           
           if (hasNightMap && !isCustomPicture) {
             child.material.userData.mixRatio = { value: 0 };
@@ -352,8 +363,10 @@ export default class Room {
             };
 
             child.material.onBeforeCompile = (shader) => {
+              child.material.userData.shader = shader; 
+
               if (hasNightMap) {
-                shader.uniforms.tNight = { value: this.loadedTextures.night[matchedKey] };
+                shader.uniforms.tNight = { value: this.loadedTextures.night[matchedKey] || new THREE.Texture() };
                 shader.uniforms.uMixRatio = child.material.userData.mixRatio;
 
                 shader.fragmentShader = `

@@ -12,11 +12,11 @@ export const CAMERA_VIEWS = {
 };
 
 export const TEXTURE_MAP = {
-  First:  { day: "/textures/room/FirstImageTexture.webp", night: "/textures/room/FirstImageTextureNight.webp" },
-  Second: { day: "/textures/room/SecondImageTexture.webp", night: "/textures/room/SecondImageTextureNight.webp" },
-  Third:  { day: "/textures/room/ThirdImageTexture.webp", night: "/textures/room/ThirdImageTextureNight.webp" },
-  Fourth: { day: "/textures/room/FourthImageTexture.webp", night: "/textures/room/FourthImageTextureNight.webp" },
-  Fifth:  { day: "/textures/room/FifthImageTexture.webp", night: "/textures/room/FifthImageTextureNight.webp" },
-  Sixth:  { day: "/textures/room/SixthImageTexture.webp", night: "/textures/room/SixthImageTextureNight.webp" },
-  Seventh:{ day: "/textures/room/SeventhImageTexture.webp", night: "/textures/room/SeventhImageTextureNight.webp" },
+  First:  { day: "/textures/room/FirstImageTexture.ktx2", night: "/textures/room/FirstImageTextureNight.ktx2" },
+  Second: { day: "/textures/room/SecondImageTexture.ktx2", night: "/textures/room/SecondImageTextureNight.ktx2" },
+  Third:  { day: "/textures/room/ThirdImageTexture.ktx2", night: "/textures/room/ThirdImageTextureNight.ktx2" },
+  Fourth: { day: "/textures/room/FourthImageTexture.ktx2", night: "/textures/room/FourthImageTextureNight.ktx2" },
+  Fifth:  { day: "/textures/room/FifthImageTexture.ktx2", night: "/textures/room/FifthImageTextureNight.ktx2" },
+  Sixth:  { day: "/textures/room/SixthImageTexture.ktx2", night: "/textures/room/SixthImageTextureNight.ktx2" },
+  Seventh:{ day: "/textures/room/SeventhImageTexture.ktx2", night: "/textures/room/SeventhImageTextureNight.ktx2" },
 };
