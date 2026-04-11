@@ -1,4 +1,3 @@
-// src/Room.js
 import * as THREE from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -101,7 +100,6 @@ export default class Room {
   }
 
   initRain() {
-    // OPTIMIZATION: Completely skip rain generation on mobile
     if (this.isMobile) return;
 
     const rainCount = 2000;
@@ -152,7 +150,6 @@ export default class Room {
   }
 
   initSmoke() {
-    // OPTIMIZATION: Completely skip smoke generation and shaders on mobile
     if (this.isMobile) return;
 
     const textureLoader = new THREE.TextureLoader();
@@ -354,7 +351,6 @@ export default class Room {
             this.swayMaterials.push(child.material);
           }
 
-          // OPTIMIZATION: Strictly disable night map compilation logic on mobile entirely
           let hasNightMap = matchedKey && TEXTURE_MAP[matchedKey].night && !this.isMobile;
           
           if (hasNightMap && !isCustomPicture) {

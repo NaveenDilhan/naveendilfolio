@@ -1,8 +1,10 @@
-// src/App.js
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import gsap from 'gsap';
-import Stats from 'stats.js'; 
+
+// [UNCOMMENT FOR PERFORMANCE MONITORING]
+// import Stats from 'stats.js'; 
+
 import { CAMERA_VIEWS } from './config.js';
 import Room from './Room.js';
 import AudioManager from './AudioManager.js'; 
@@ -24,7 +26,9 @@ export default class App {
 
     this.render = this.render.bind(this);
 
-    this.initStats(); 
+    // [UNCOMMENT FOR PERFORMANCE MONITORING]
+    // this.initStats(); 
+    
     this.initScene();
     this.initCamera();
     this.initRenderer();
@@ -46,6 +50,7 @@ export default class App {
     gsap.ticker.add(this.render);
   }
 
+  /* [UNCOMMENT FOR PERFORMANCE MONITORING]
   initStats() {
     this.stats = new Stats();
     this.stats.showPanel(0); 
@@ -57,9 +62,9 @@ export default class App {
     
     document.body.appendChild(this.stats.dom);
   }
+  */
 
   initThemeToggle() {
-    // OPTIMIZATION: Completely remove night mode button on mobile
     if (this.isMobile) return;
 
     const btn = document.createElement('button');
@@ -225,7 +230,6 @@ export default class App {
     });
     this.renderer.setSize(this.size.width, this.size.height);
     
-    // OPTIMIZATION: Start mobile at pixel ratio 1.0 to guarantee smooth frames
     this.targetPixelRatio = this.isMobile ? 1.0 : Math.min(window.devicePixelRatio, 2);
     this.currentPixelRatio = this.targetPixelRatio;
     
@@ -334,7 +338,7 @@ export default class App {
     this.currentIntersects = []; 
 
     window.addEventListener('pointermove', (event) => {
-      if (this.isMobile) return; // Prevent unnecessary variable updates on mobile swipe
+      if (this.isMobile) return; 
       this.mouse.x = (event.clientX / this.size.width) * 2 - 1;
       this.mouse.y = -(event.clientY / this.size.height) * 2 + 1;
     });
@@ -415,7 +419,8 @@ export default class App {
   }
 
   render() {
-    if (this.stats) this.stats.begin();
+    // [UNCOMMENT FOR PERFORMANCE MONITORING]
+    // if (this.stats) this.stats.begin();
 
     const delta = this.clock.getDelta();
     const elapsedTime = this.clock.elapsedTime;
@@ -448,7 +453,7 @@ export default class App {
 
       if (this.isIntroDone && this.room.interactiveObjects.length > 0) {
         
-        // OPTIMIZATION: Entirely skip continuous hover raycasting on mobile devices
+        
         if (!this.isMobile) {
             const mouseMoved = this.mouse.x !== this.lastRaycastMouse.x || this.mouse.y !== this.lastRaycastMouse.y;
 
@@ -458,7 +463,7 @@ export default class App {
                     this.currentIntersects = this.raycaster.intersectObjects(this.room.interactiveObjects, false);
                     this.lastRaycastMouse.copy(this.mouse); 
                 } else if (!mouseMoved) {
-                    // Do nothing, reuse previous
+                    
                 } else {
                     this.currentIntersects = [];
                 }
@@ -508,6 +513,7 @@ export default class App {
     this.room.update(elapsedTime);
     this.renderer.render(this.scene, this.camera);
 
-    if (this.stats) this.stats.end();
+    // [UNCOMMENT FOR PERFORMANCE MONITORING]
+    // if (this.stats) this.stats.end();
   }
 }

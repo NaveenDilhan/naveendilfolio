@@ -1,4 +1,3 @@
-// src/AudioManager.js
 import gsap from 'gsap'; 
 
 export default class AudioManager {
@@ -12,7 +11,7 @@ export default class AudioManager {
     this.currentTrackIndex = Math.floor(Math.random() * this.tracks.length);
     
     this.bgm = new Audio(this.tracks[this.currentTrackIndex].src);
-    this.bgm.preload = 'auto'; // OPTIMIZATION: Force full preload to prevent audio cut-off
+    this.bgm.preload = 'auto'; 
     this.bgm.loop = false; 
     this.bgm.volume = 0.4;
 
