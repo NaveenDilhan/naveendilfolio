@@ -12,7 +12,7 @@ A highly immersive, interactive 3D web-based portfolio that allows visitors to e
 * **Responsive & Mobile-Optimised**: Automatically detects mobile devices to gracefully disable heavy visual effects (like volumetric rain, smoke, and complex glass refractions) to ensure smooth performance across all platforms.
 * **Video Integration**: Features a live video texture playing seamlessly on the 3D computer screen.
 
- ![My Portfolio Screenshot](./client/public/media/Portfolio.png)
+ ![My Portfolio Screenshot](./public/media/Portfolio.png)
 
 ## 🛠️ Tech Stack
 
